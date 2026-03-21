@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/keumbinoh/Desktop/**)",
+      "Read(//Users/keumbinoh/Documents/**)",
+      "Read(//Users/keumbinoh/Downloads/**)",
+      "Bash(wc:*)"
+    ]
+  }
+}
