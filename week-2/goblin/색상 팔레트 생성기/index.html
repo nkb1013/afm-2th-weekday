@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>색상 팔레트 생성기</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .fade-up { animation: fadeUp 0.4s ease-out forwards; }
+    .copy-toast {
+      animation: fadeUp 0.2s ease-out forwards;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    // ========================================
+    // 🪝 React Hooks Destructuring
+    // ========================================
+    const { useState, useEffect, useCallback, useMemo, useRef } = React;
+
+    // ========================================
+    // 🔧 Color Utility Functions
+    // ========================================
+    function hexToRgb(hex) {
+      const clean = hex.replace("#", "");
+      if (clean.length !== 6) return null;
+      const num = parseInt(clean, 16);
+      if (isNaN(num)) return null;
+      return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+    }
+
+    function rgbToHex(r, g, b) {
+      return "#" + [r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("");
+    }
+
+    function rgbToHsl(r, g, b) {
+      r /= 255; g /= 255; b /= 255;
+      const max = Math.max(r, g, b), min = Math.min(r, g, b);
+      let h, s, l = (max + min) / 2;
+      if (max === min) {
+        h = s = 0;
+      } else {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        switch (max) {
+          case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+          case g: h = ((b - r) / d + 2) / 6; break;
+          case b: h = ((r - g) / d + 4) / 6; break;
+        }
+      }
+      return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
+    }
+
+    function luminance(r, g, b) {
+      const [rs, gs, bs] = [r, g, b].map((v) => {
+        v /= 255;
+        return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+      });
+      return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs;
+    }
+
+    function contrastRatio(rgb1, rgb2) {
+      const l1 = luminance(rgb1.r, rgb1.g, rgb1.b);
+      const l2 = luminance(rgb2.r, rgb2.g, rgb2.b);
+      const lighter = Math.max(l1, l2);
+      const darker = Math.min(l1, l2);
+      return ((lighter + 0.05) / (darker + 0.05)).toFixed(2);
+    }
+
+    function getTextColor(rgb) {
+      return luminance(rgb.r, rgb.g, rgb.b) > 0.4 ? "#1a1a2e" : "#ffffff";
+    }
+
+    function generateShades(hex, count = 5) {
+      const rgb = hexToRgb(hex);
+      if (!rgb) return [];
+      const lighter = [];
+      const darker = [];
+      for (let i = 1; i <= count; i++) {
+        const factor = i / (count + 1);
+        lighter.push({
+          hex: rgbToHex(
+            rgb.r + (255 - rgb.r) * factor,
+            rgb.g + (255 - rgb.g) * factor,
+            rgb.b + (255 - rgb.b) * factor
+          ),
+        });
+        darker.push({
+          hex: rgbToHex(
+            rgb.r * (1 - factor),
+            rgb.g * (1 - factor),
+            rgb.b * (1 - factor)
+          ),
+        });
+      }
+      return { lighter: lighter.reverse(), darker, base: hex };
+    }
+
+    // ========================================
+    // 🎨 Design System Components
+    // ========================================
+    function Button({ variant = "primary", size = "md", disabled = false, onClick, children, className = "" }) {
+      const variants = {
+        primary: "bg-violet-600 hover:bg-violet-700 text-white shadow-lg shadow-violet-500/25",
+        secondary: "bg-gray-700 hover:bg-gray-600 text-gray-200",
+        ghost: "bg-transparent hover:bg-gray-700/50 text-gray-300 border border-gray-600",
+      };
+      const sizes = {
+        sm: "px-3 py-1.5 text-sm",
+        md: "px-5 py-2.5 text-base",
+        lg: "px-7 py-3.5 text-lg",
+      };
+      return (
+        <button
+          onClick={onClick}
+          disabled={disabled}
+          className={`rounded-xl font-semibold transition-all duration-200 ${variants[variant]} ${sizes[size]} ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer active:scale-95"} ${className}`}
+        >
+          {children}
+        </button>
+      );
+    }
+
+    function Card({ children, className = "" }) {
+      return (
+        <div className={`bg-gray-800/60 backdrop-blur-xl border border-gray-700/50 rounded-2xl p-6 ${className}`}>
+          {children}
+        </div>
+      );
+    }
+
+    // ========================================
+    // 🧩 Copy Toast
+    // ========================================
+    function CopyToast({ message, show }) {
+      if (!show) return null;
+      return (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 copy-toast">
+          <div className="bg-gray-800 border border-gray-600 text-white px-5 py-2.5 rounded-xl shadow-2xl text-sm font-medium">
+            {message}
+          </div>
+        </div>
+      );
+    }
+
+    // ========================================
+    // 🎨 Color Swatch (클릭하면 복사)
+    // ========================================
+    function ColorSwatch({ hex, size = "md", showLabel = true, onCopy }) {
+      const rgb = hexToRgb(hex);
+      const hsl = rgb ? rgbToHsl(rgb.r, rgb.g, rgb.b) : null;
+      const textColor = rgb ? getTextColor(rgb) : "#fff";
+      const sizes = { sm: "h-16", md: "h-24", lg: "h-32" };
+
+      return (
+        <button
+          onClick={() => onCopy(hex)}
+          className={`w-full ${sizes[size]} rounded-xl transition-all duration-200 hover:scale-105 hover:shadow-xl cursor-pointer relative group`}
+          style={{ backgroundColor: hex }}
+          title={`클릭하여 ${hex} 복사`}
+        >
+          {showLabel && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: textColor }}>
+              <span className="font-mono text-sm font-bold">{hex.toUpperCase()}</span>
+              {rgb && <span className="text-xs mt-0.5">RGB({rgb.r}, {rgb.g}, {rgb.b})</span>}
+            </div>
+          )}
+        </button>
+      );
+    }
+
+    // ========================================
+    // 📄 View 1: 그라데이션 바 형태
+    // ========================================
+    function GradientBarView({ shades, onCopy }) {
+      const allColors = [...shades.lighter, shades.base, ...shades.darker];
+      return (
+        <Card>
+          <h3 className="text-lg font-bold text-white mb-4">🌈 그라데이션 바</h3>
+          <div className="flex rounded-2xl overflow-hidden h-28 shadow-xl">
+            {allColors.map((hex, i) => {
+              const color = typeof hex === "string" ? hex : hex.hex;
+              const rgb = hexToRgb(color);
+              const textColor = rgb ? getTextColor(rgb) : "#fff";
+              const isBase = i === shades.lighter.length;
+              return (
+                <button
+                  key={i}
+                  onClick={() => onCopy(color)}
+                  className={`flex-1 flex flex-col items-center justify-end pb-3 cursor-pointer hover:flex-[1.5] transition-all duration-300 relative ${isBase ? "ring-2 ring-white/50 ring-inset" : ""}`}
+                  style={{ backgroundColor: color }}
+                >
+                  <span className="font-mono text-[10px] font-bold" style={{ color: textColor }}>
+                    {color.toUpperCase()}
+                  </span>
+                  {isBase && (
+                    <span className="absolute top-2 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-black/20" style={{ color: textColor }}>
+                      BASE
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </Card>
+      );
+    }
+
+    // ========================================
+    // 📄 View 2: 카드 그리드 형태
+    // ========================================
+    function CardGridView({ shades, onCopy }) {
+      const sections = [
+        { title: "밝은 변형 (Lighter)", colors: shades.lighter, icon: "☀️" },
+        { title: "기본 색상 (Base)", colors: [{ hex: shades.base }], icon: "🎯" },
+        { title: "어두운 변형 (Darker)", colors: shades.darker, icon: "🌙" },
+      ];
+      return (
+        <Card>
+          <h3 className="text-lg font-bold text-white mb-4">🃏 카드 그리드</h3>
+          {sections.map((section) => (
+            <div key={section.title} className="mb-5 last:mb-0">
+              <p className="text-sm font-medium text-gray-400 mb-2">{section.icon} {section.title}</p>
+              <div className="grid grid-cols-5 gap-3">
+                {section.colors.map((c, i) => {
+                  const hex = typeof c === "string" ? c : c.hex;
+                  const rgb = hexToRgb(hex);
+                  const hsl = rgb ? rgbToHsl(rgb.r, rgb.g, rgb.b) : null;
+                  const textColor = rgb ? getTextColor(rgb) : "#fff";
+                  const cr = rgb ? contrastRatio(rgb, { r: 255, g: 255, b: 255 }) : 0;
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => onCopy(hex)}
+                      className="rounded-xl overflow-hidden cursor-pointer hover:scale-105 transition-all duration-200 shadow-lg group"
+                    >
+                      <div className="h-20" style={{ backgroundColor: hex }} />
+                      <div className="bg-gray-900/90 p-2.5">
+                        <p className="font-mono text-xs font-bold text-white">{hex.toUpperCase()}</p>
+                        {rgb && <p className="text-[10px] text-gray-400 mt-0.5">RGB({rgb.r},{rgb.g},{rgb.b})</p>}
+                        {hsl && <p className="text-[10px] text-gray-500">HSL({hsl.h}°,{hsl.s}%,{hsl.l}%)</p>}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </Card>
+      );
+    }
+
+    // ========================================
+    // 📄 View 3: 테이블 형태
+    // ========================================
+    function TableView({ shades, onCopy }) {
+      const allColors = [
+        ...shades.lighter.map((c, i) => ({ ...c, label: `밝은 ${shades.lighter.length - i}` })),
+        { hex: shades.base, label: "기본 (Base)" },
+        ...shades.darker.map((c, i) => ({ ...c, label: `어두운 ${i + 1}` })),
+      ];
+      return (
+        <Card>
+          <h3 className="text-lg font-bold text-white mb-4">📊 상세 테이블</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-gray-400 text-left border-b border-gray-700">
+                  <th className="pb-3 pr-3">미리보기</th>
+                  <th className="pb-3 pr-3">단계</th>
+                  <th className="pb-3 pr-3">HEX</th>
+                  <th className="pb-3 pr-3">RGB</th>
+                  <th className="pb-3 pr-3">HSL</th>
+                  <th className="pb-3">명암비 (흰색)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allColors.map((c, i) => {
+                  const hex = c.hex;
+                  const rgb = hexToRgb(hex);
+                  const hsl = rgb ? rgbToHsl(rgb.r, rgb.g, rgb.b) : null;
+                  const cr = rgb ? contrastRatio(rgb, { r: 255, g: 255, b: 255 }) : "N/A";
+                  const isBase = c.label.includes("기본");
+                  return (
+                    <tr
+                      key={i}
+                      onClick={() => onCopy(hex)}
+                      className={`border-b border-gray-700/50 cursor-pointer hover:bg-gray-700/30 transition-colors ${isBase ? "bg-gray-700/20" : ""}`}
+                    >
+                      <td className="py-2.5 pr-3">
+                        <div className="w-10 h-10 rounded-lg shadow-inner" style={{ backgroundColor: hex }} />
+                      </td>
+                      <td className="py-2.5 pr-3">
+                        <span className={`font-medium ${isBase ? "text-violet-400" : "text-gray-300"}`}>{c.label}</span>
+                      </td>
+                      <td className="py-2.5 pr-3">
+                        <span className="font-mono text-white font-bold">{hex.toUpperCase()}</span>
+                      </td>
+                      <td className="py-2.5 pr-3 text-gray-400 font-mono">
+                        {rgb ? `${rgb.r}, ${rgb.g}, ${rgb.b}` : "-"}
+                      </td>
+                      <td className="py-2.5 pr-3 text-gray-400 font-mono">
+                        {hsl ? `${hsl.h}°, ${hsl.s}%, ${hsl.l}%` : "-"}
+                      </td>
+                      <td className="py-2.5">
+                        <span className={`font-mono font-bold ${cr >= 4.5 ? "text-green-400" : cr >= 3 ? "text-yellow-400" : "text-red-400"}`}>
+                          {cr}:1
+                        </span>
+                        {cr >= 4.5 ? " ✅ AA" : cr >= 3 ? " ⚠️" : " ❌"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      );
+    }
+
+    // ========================================
+    // 📄 View 4: CSS 코드 형태
+    // ========================================
+    function CodeView({ shades, onCopy }) {
+      const allColors = [
+        ...shades.lighter.map((c, i) => ({ hex: c.hex, name: `lighter-${shades.lighter.length - i}` })),
+        { hex: shades.base, name: "base" },
+        ...shades.darker.map((c, i) => ({ hex: c.hex, name: `darker-${i + 1}` })),
+      ];
+
+      const cssVars = allColors.map((c) => `  --color-${c.name}: ${c.hex};`).join("\n");
+      const tailwindConfig = allColors.map((c, i) => `    ${(i + 1) * 100}: '${c.hex}',`).join("\n");
+
+      const cssCode = `:root {\n${cssVars}\n}`;
+      const twCode = `// tailwind.config.js\ncolors: {\n  custom: {\n${tailwindConfig}\n  }\n}`;
+
+      return (
+        <Card>
+          <h3 className="text-lg font-bold text-white mb-4">💻 코드 스니펫</h3>
+          <div className="space-y-4">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-medium text-gray-400">CSS Custom Properties</p>
+                <Button size="sm" variant="ghost" onClick={() => onCopy(cssCode)}>복사</Button>
+              </div>
+              <pre className="bg-gray-900/80 rounded-xl p-4 text-sm font-mono text-green-400 overflow-x-auto border border-gray-700/50">
+                {cssCode}
+              </pre>
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-medium text-gray-400">Tailwind Config</p>
+                <Button size="sm" variant="ghost" onClick={() => onCopy(twCode)}>복사</Button>
+              </div>
+              <pre className="bg-gray-900/80 rounded-xl p-4 text-sm font-mono text-blue-400 overflow-x-auto border border-gray-700/50">
+                {twCode}
+              </pre>
+            </div>
+          </div>
+        </Card>
+      );
+    }
+
+    // ========================================
+    // 📄 View 5: 원형 팔레트 형태
+    // ========================================
+    function CirclePaletteView({ shades, onCopy }) {
+      const allColors = [...shades.lighter, { hex: shades.base }, ...shades.darker];
+      const total = allColors.length;
+      const radius = 120;
+
+      return (
+        <Card>
+          <h3 className="text-lg font-bold text-white mb-4">🎡 원형 팔레트</h3>
+          <div className="flex justify-center py-4">
+            <div className="relative" style={{ width: radius * 2 + 80, height: radius * 2 + 80 }}>
+              {/* Center base color */}
+              <button
+                onClick={() => onCopy(shades.base)}
+                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 rounded-full shadow-2xl cursor-pointer hover:scale-110 transition-all duration-300 ring-4 ring-white/20 z-10"
+                style={{ backgroundColor: shades.base }}
+                title={shades.base.toUpperCase()}
+              >
+                <span className="font-mono text-[10px] font-bold" style={{ color: getTextColor(hexToRgb(shades.base)) }}>
+                  BASE
+                </span>
+              </button>
+              {/* Orbiting colors */}
+              {allColors.map((c, i) => {
+                const hex = typeof c === "string" ? c : c.hex;
+                const angle = (i / total) * Math.PI * 2 - Math.PI / 2;
+                const x = Math.cos(angle) * radius + radius + 40 - 22;
+                const y = Math.sin(angle) * radius + radius + 40 - 22;
+                const rgb = hexToRgb(hex);
+                const textColor = rgb ? getTextColor(rgb) : "#fff";
+                return (
+                  <button
+                    key={i}
+                    onClick={() => onCopy(hex)}
+                    className="absolute w-11 h-11 rounded-full shadow-lg cursor-pointer hover:scale-125 transition-all duration-300 flex items-center justify-center"
+                    style={{ backgroundColor: hex, left: x, top: y }}
+                    title={hex.toUpperCase()}
+                  >
+                    <span className="font-mono text-[8px] font-bold" style={{ color: textColor }}>
+                      {hex.toUpperCase().slice(1)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </Card>
+      );
+    }
+
+    // ========================================
+    // 🚀 App Component
+    // ========================================
+    function App() {
+      const [hexInput, setHexInput] = useState("#6D28D9");
+      const [activeColor, setActiveColor] = useState("#6D28D9");
+      const [toast, setToast] = useState({ show: false, message: "" });
+      const [viewMode, setViewMode] = useState("all");
+      const inputRef = useRef(null);
+
+      const shades = useMemo(() => generateShades(activeColor), [activeColor]);
+
+      const showToast = useCallback((msg) => {
+        setToast({ show: true, message: msg });
+        setTimeout(() => setToast({ show: false, message: "" }), 1500);
+      }, []);
+
+      const handleCopy = useCallback((text) => {
+        navigator.clipboard.writeText(text).then(() => {
+          showToast(`📋 ${typeof text === "string" && text.startsWith("#") ? text.toUpperCase() : "코드"} 복사됨!`);
+        });
+      }, [showToast]);
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        let cleaned = hexInput.trim();
+        if (!cleaned.startsWith("#")) cleaned = "#" + cleaned;
+        if (/^#[0-9A-Fa-f]{6}$/.test(cleaned)) {
+          setActiveColor(cleaned);
+        }
+      };
+
+      const isValidHex = useMemo(() => {
+        let cleaned = hexInput.trim();
+        if (!cleaned.startsWith("#")) cleaned = "#" + cleaned;
+        return /^#[0-9A-Fa-f]{6}$/.test(cleaned);
+      }, [hexInput]);
+
+      const presets = ["#6D28D9", "#2563EB", "#059669", "#DC2626", "#D97706", "#EC4899", "#0891B2", "#4F46E5"];
+
+      const views = [
+        { key: "all", label: "전체 보기" },
+        { key: "gradient", label: "그라데이션" },
+        { key: "cards", label: "카드" },
+        { key: "table", label: "테이블" },
+        { key: "code", label: "코드" },
+        { key: "circle", label: "원형" },
+      ];
+
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-violet-950 text-white">
+          {/* Header */}
+          <header className="border-b border-gray-800/50 backdrop-blur-xl bg-gray-900/30 sticky top-0 z-40">
+            <div className="max-w-6xl mx-auto px-4 py-4">
+              <h1 className="text-2xl font-extrabold bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent">
+                🎨 색상 팔레트 생성기
+              </h1>
+              <p className="text-xs text-gray-500 mt-0.5">HEX 코드를 입력하면 밝은/어두운 변형 5단계를 생성합니다</p>
+            </div>
+          </header>
+
+          <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+            {/* Input Section */}
+            <Card>
+              <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-4 items-end">
+                <div className="flex-1">
+                  <label className="text-sm font-medium text-gray-300 mb-1.5 block">HEX 색상 코드</label>
+                  <div className="flex gap-3 items-center">
+                    <input
+                      type="color"
+                      value={activeColor}
+                      onChange={(e) => { setHexInput(e.target.value); setActiveColor(e.target.value); }}
+                      className="w-12 h-12 rounded-xl cursor-pointer border-2 border-gray-600 bg-transparent"
+                    />
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={hexInput}
+                      onChange={(e) => setHexInput(e.target.value)}
+                      placeholder="#6D28D9"
+                      className={`flex-1 bg-gray-900/80 border ${isValidHex ? "border-gray-600 focus:ring-violet-500" : "border-red-500 focus:ring-red-500"} rounded-xl px-4 py-3 text-white font-mono text-lg placeholder-gray-500 focus:outline-none focus:ring-2 focus:border-transparent transition-all`}
+                    />
+                  </div>
+                </div>
+                <Button variant="primary" size="lg" disabled={!isValidHex} onClick={handleSubmit} className="w-full sm:w-auto">
+                  생성하기
+                </Button>
+              </form>
+
+              {/* Presets */}
+              <div className="mt-4">
+                <p className="text-xs text-gray-500 mb-2">추천 색상</p>
+                <div className="flex flex-wrap gap-2">
+                  {presets.map((color) => (
+                    <button
+                      key={color}
+                      onClick={() => { setHexInput(color); setActiveColor(color); }}
+                      className={`w-9 h-9 rounded-lg cursor-pointer hover:scale-110 transition-all duration-200 shadow-md ${activeColor === color ? "ring-2 ring-white ring-offset-2 ring-offset-gray-800" : ""}`}
+                      style={{ backgroundColor: color }}
+                      title={color}
+                    />
+                  ))}
+                </div>
+              </div>
+            </Card>
+
+            {/* View Mode Tabs */}
+            {shades && (
+              <div className="flex flex-wrap gap-2">
+                {views.map((v) => (
+                  <button
+                    key={v.key}
+                    onClick={() => setViewMode(v.key)}
+                    className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${viewMode === v.key ? "bg-violet-600 text-white shadow-lg shadow-violet-500/30" : "bg-gray-800/50 text-gray-400 hover:text-white hover:bg-gray-700/50"}`}
+                  >
+                    {v.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Views */}
+            {shades && (
+              <div className="space-y-6 fade-up">
+                {(viewMode === "all" || viewMode === "gradient") && (
+                  <GradientBarView shades={shades} onCopy={handleCopy} />
+                )}
+                {(viewMode === "all" || viewMode === "cards") && (
+                  <CardGridView shades={shades} onCopy={handleCopy} />
+                )}
+                {(viewMode === "all" || viewMode === "table") && (
+                  <TableView shades={shades} onCopy={handleCopy} />
+                )}
+                {(viewMode === "all" || viewMode === "code") && (
+                  <CodeView shades={shades} onCopy={handleCopy} />
+                )}
+                {(viewMode === "all" || viewMode === "circle") && (
+                  <CirclePaletteView shades={shades} onCopy={handleCopy} />
+                )}
+              </div>
+            )}
+          </main>
+
+          <CopyToast message={toast.message} show={toast.show} />
+        </div>
+      );
+    }
+
+    // ========================================
+    // 🔌 Rendering
+    // ========================================
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>

@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>D-day 카운터</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    @keyframes pulse-glow {
+      0%, 100% { box-shadow: 0 0 20px rgba(99, 102, 241, 0.3); }
+      50% { box-shadow: 0 0 40px rgba(99, 102, 241, 0.6); }
+    }
+    .pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
+    @keyframes flip {
+      0% { transform: rotateX(0deg); }
+      50% { transform: rotateX(-90deg); }
+      100% { transform: rotateX(0deg); }
+    }
+    .flip-animation { animation: flip 0.6s ease-in-out; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    // ========================================
+    // 🪝 React Hooks Destructuring
+    // ========================================
+    const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+    // ========================================
+    // 🎨 Design System Components
+    // ========================================
+    function Button({ variant = "primary", size = "md", disabled = false, onClick, children, className = "" }) {
+      const variants = {
+        primary: "bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-500/30",
+        secondary: "bg-gray-700 hover:bg-gray-600 text-gray-200",
+        danger: "bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-500/30",
+        ghost: "bg-transparent hover:bg-gray-700/50 text-gray-300",
+      };
+      const sizes = {
+        sm: "px-3 py-1.5 text-sm",
+        md: "px-5 py-2.5 text-base",
+        lg: "px-7 py-3.5 text-lg",
+      };
+      return (
+        <button
+          onClick={onClick}
+          disabled={disabled}
+          className={`rounded-xl font-semibold transition-all duration-200 ${variants[variant]} ${sizes[size]} ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer active:scale-95"} ${className}`}
+        >
+          {children}
+        </button>
+      );
+    }
+
+    function Input({ type = "text", label, value, onChange, placeholder, error, className = "" }) {
+      return (
+        <div className={`flex flex-col gap-1.5 ${className}`}>
+          {label && <label className="text-sm font-medium text-gray-300">{label}</label>}
+          <input
+            type={type}
+            value={value}
+            onChange={onChange}
+            placeholder={placeholder}
+            className={`bg-gray-800/80 border ${error ? "border-red-500" : "border-gray-600"} rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all`}
+          />
+          {error && <span className="text-red-400 text-xs">{error}</span>}
+        </div>
+      );
+    }
+
+    function Card({ children, className = "", glowing = false }) {
+      return (
+        <div className={`bg-gray-800/60 backdrop-blur-xl border border-gray-700/50 rounded-2xl p-6 ${glowing ? "pulse-glow" : ""} ${className}`}>
+          {children}
+        </div>
+      );
+    }
+
+    function Modal({ isOpen, onClose, title, children }) {
+      if (!isOpen) return null;
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div
+            className="relative bg-gray-800 border border-gray-700 rounded-2xl p-6 w-full max-w-md shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-xl font-bold text-white">{title}</h3>
+              <button onClick={onClose} className="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+            </div>
+            {children}
+          </div>
+        </div>
+      );
+    }
+
+    function Badge({ children, color = "indigo", className = "" }) {
+      const colors = {
+        indigo: "bg-indigo-500/20 text-indigo-300 border-indigo-500/30",
+        red: "bg-red-500/20 text-red-300 border-red-500/30",
+        green: "bg-green-500/20 text-green-300 border-green-500/30",
+        yellow: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",
+        gray: "bg-gray-500/20 text-gray-300 border-gray-500/30",
+      };
+      return (
+        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${colors[color]} ${className}`}>
+          {children}
+        </span>
+      );
+    }
+
+    // ========================================
+    // 🧩 Time Unit Flip Card
+    // ========================================
+    function FlipCard({ value, label }) {
+      const [flip, setFlip] = useState(false);
+      const prevValue = useRef(value);
+
+      useEffect(() => {
+        if (prevValue.current !== value) {
+          setFlip(true);
+          const timer = setTimeout(() => setFlip(false), 600);
+          prevValue.current = value;
+          return () => clearTimeout(timer);
+        }
+      }, [value]);
+
+      const display = String(value).padStart(2, "0");
+
+      return (
+        <div className="flex flex-col items-center gap-2">
+          <div className={`bg-gray-900/80 border border-gray-600/50 rounded-xl w-20 h-24 sm:w-24 sm:h-28 flex items-center justify-center ${flip ? "flip-animation" : ""}`}>
+            <span className="text-3xl sm:text-4xl font-bold text-white font-mono">{display}</span>
+          </div>
+          <span className="text-xs sm:text-sm text-gray-400 font-medium">{label}</span>
+        </div>
+      );
+    }
+
+    // ========================================
+    // 📄 D-day Counter Card
+    // ========================================
+    function DdayCard({ dday, now, onEdit, onDelete }) {
+      const targetDate = new Date(dday.targetDate);
+      const diff = targetDate.getTime() - now.getTime();
+      const isPast = diff < 0;
+      const absDiff = Math.abs(diff);
+
+      const days = Math.floor(absDiff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((absDiff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((absDiff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((absDiff % (1000 * 60)) / 1000);
+
+      const isToday = days === 0 && !isPast;
+      const progressPercent = useMemo(() => {
+        if (!dday.createdAt) return 0;
+        const created = new Date(dday.createdAt).getTime();
+        const target = targetDate.getTime();
+        const total = target - created;
+        if (total <= 0) return 100;
+        const elapsed = now.getTime() - created;
+        return Math.min(100, Math.max(0, (elapsed / total) * 100));
+      }, [dday.createdAt, dday.targetDate, now]);
+
+      const ddayText = isToday ? "D-Day!" : isPast ? `D+${days}` : `D-${days}`;
+
+      return (
+        <Card glowing={isToday} className="relative overflow-hidden group">
+          {/* Progress bar */}
+          <div className="absolute top-0 left-0 h-1 bg-gray-700/50 w-full">
+            <div
+              className={`h-full transition-all duration-1000 ${isPast ? "bg-red-500" : isToday ? "bg-green-500" : "bg-indigo-500"}`}
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+
+          <div className="flex items-start justify-between mb-4 mt-1">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-lg">{dday.emoji || "📅"}</span>
+                <h3 className="text-lg font-bold text-white truncate">{dday.title}</h3>
+              </div>
+              <p className="text-sm text-gray-400">
+                {targetDate.toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "long" })}
+              </p>
+            </div>
+            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button onClick={() => onEdit(dday)} className="p-1.5 rounded-lg hover:bg-gray-700/50 text-gray-400 hover:text-white transition-colors">✏️</button>
+              <button onClick={() => onDelete(dday.id)} className="p-1.5 rounded-lg hover:bg-gray-700/50 text-gray-400 hover:text-red-400 transition-colors">🗑️</button>
+            </div>
+          </div>
+
+          {/* D-day display */}
+          <div className="text-center mb-4">
+            <span className={`text-4xl sm:text-5xl font-extrabold ${isToday ? "text-green-400" : isPast ? "text-red-400" : "text-indigo-400"}`}>
+              {ddayText}
+            </span>
+          </div>
+
+          {/* Realtime countdown */}
+          <div className="flex justify-center gap-3">
+            <FlipCard value={days} label="일" />
+            <FlipCard value={hours} label="시간" />
+            <FlipCard value={minutes} label="분" />
+            <FlipCard value={seconds} label="초" />
+          </div>
+
+          {/* Status badge */}
+          <div className="flex justify-center mt-4">
+            {isToday ? (
+              <Badge color="green">🎉 오늘이 바로 그 날!</Badge>
+            ) : isPast ? (
+              <Badge color="red">지난 이벤트</Badge>
+            ) : days <= 7 ? (
+              <Badge color="yellow">곧 다가옵니다!</Badge>
+            ) : (
+              <Badge color="indigo">진행 중</Badge>
+            )}
+          </div>
+        </Card>
+      );
+    }
+
+    // ========================================
+    // 🚀 App Component
+    // ========================================
+    function App() {
+      const [ddays, setDdays] = useState(() => {
+        try {
+          const saved = localStorage.getItem("dday-counter-data");
+          return saved ? JSON.parse(saved) : [
+            { id: 1, title: "새해", targetDate: "2027-01-01", emoji: "🎆", createdAt: new Date().toISOString() },
+            { id: 2, title: "크리스마스", targetDate: "2026-12-25", emoji: "🎄", createdAt: new Date().toISOString() },
+          ];
+        } catch { return []; }
+      });
+      const [now, setNow] = useState(new Date());
+      const [showModal, setShowModal] = useState(false);
+      const [editingDday, setEditingDday] = useState(null);
+      const [form, setForm] = useState({ title: "", targetDate: "", emoji: "📅" });
+      const [sortBy, setSortBy] = useState("closest");
+
+      // 실시간 업데이트 (1초마다)
+      useEffect(() => {
+        const timer = setInterval(() => setNow(new Date()), 1000);
+        return () => clearInterval(timer);
+      }, []);
+
+      // localStorage 저장
+      useEffect(() => {
+        localStorage.setItem("dday-counter-data", JSON.stringify(ddays));
+      }, [ddays]);
+
+      const emojis = ["📅", "🎉", "🎆", "🎄", "💼", "✈️", "🎓", "💍", "🏆", "🎂", "❤️", "⭐"];
+
+      const openAddModal = () => {
+        setEditingDday(null);
+        setForm({ title: "", targetDate: "", emoji: "📅" });
+        setShowModal(true);
+      };
+
+      const openEditModal = (dday) => {
+        setEditingDday(dday);
+        setForm({ title: dday.title, targetDate: dday.targetDate, emoji: dday.emoji || "📅" });
+        setShowModal(true);
+      };
+
+      const handleSave = () => {
+        if (!form.title.trim() || !form.targetDate) return;
+        if (editingDday) {
+          setDdays((prev) => prev.map((d) => d.id === editingDday.id ? { ...d, ...form } : d));
+        } else {
+          setDdays((prev) => [...prev, { id: Date.now(), ...form, createdAt: new Date().toISOString() }]);
+        }
+        setShowModal(false);
+      };
+
+      const handleDelete = (id) => {
+        setDdays((prev) => prev.filter((d) => d.id !== id));
+      };
+
+      const sortedDdays = useMemo(() => {
+        const sorted = [...ddays];
+        if (sortBy === "closest") {
+          sorted.sort((a, b) => {
+            const diffA = Math.abs(new Date(a.targetDate).getTime() - now.getTime());
+            const diffB = Math.abs(new Date(b.targetDate).getTime() - now.getTime());
+            return diffA - diffB;
+          });
+        } else if (sortBy === "furthest") {
+          sorted.sort((a, b) => {
+            const diffA = Math.abs(new Date(a.targetDate).getTime() - now.getTime());
+            const diffB = Math.abs(new Date(b.targetDate).getTime() - now.getTime());
+            return diffB - diffA;
+          });
+        } else if (sortBy === "created") {
+          sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        }
+        return sorted;
+      }, [ddays, sortBy, now]);
+
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-indigo-950 text-white">
+          {/* Header */}
+          <header className="border-b border-gray-800/50 backdrop-blur-xl bg-gray-900/30 sticky top-0 z-40">
+            <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl font-extrabold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+                  ⏳ D-Day 카운터
+                </h1>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {now.toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "long" })}
+                  {" "}
+                  {now.toLocaleTimeString("ko-KR")}
+                </p>
+              </div>
+              <Button variant="primary" onClick={openAddModal}>+ 새 D-Day</Button>
+            </div>
+          </header>
+
+          {/* Sort Controls */}
+          <div className="max-w-5xl mx-auto px-4 mt-6 flex items-center gap-2">
+            <span className="text-sm text-gray-400">정렬:</span>
+            {[
+              { key: "closest", label: "가까운 순" },
+              { key: "furthest", label: "먼 순" },
+              { key: "created", label: "최근 추가 순" },
+            ].map((s) => (
+              <button
+                key={s.key}
+                onClick={() => setSortBy(s.key)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${sortBy === s.key ? "bg-indigo-600 text-white" : "bg-gray-800/50 text-gray-400 hover:text-white hover:bg-gray-700/50"}`}
+              >
+                {s.label}
+              </button>
+            ))}
+            <span className="ml-auto text-sm text-gray-500">{ddays.length}개의 D-Day</span>
+          </div>
+
+          {/* D-day List */}
+          <main className="max-w-5xl mx-auto px-4 py-6">
+            {sortedDdays.length === 0 ? (
+              <Card className="text-center py-16">
+                <p className="text-5xl mb-4">📅</p>
+                <p className="text-gray-400 text-lg mb-2">아직 등록된 D-Day가 없습니다</p>
+                <p className="text-gray-500 text-sm mb-6">새로운 D-Day를 추가해 카운트다운을 시작하세요!</p>
+                <Button onClick={openAddModal}>+ 첫 D-Day 만들기</Button>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {sortedDdays.map((dday) => (
+                  <DdayCard key={dday.id} dday={dday} now={now} onEdit={openEditModal} onDelete={handleDelete} />
+                ))}
+              </div>
+            )}
+          </main>
+
+          {/* Add/Edit Modal */}
+          <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editingDday ? "D-Day 수정" : "새 D-Day 추가"}>
+            <div className="flex flex-col gap-4">
+              <Input
+                label="제목"
+                value={form.title}
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
+                placeholder="예: 여행 출발일"
+              />
+              <Input
+                type="date"
+                label="목표 날짜"
+                value={form.targetDate}
+                onChange={(e) => setForm({ ...form, targetDate: e.target.value })}
+              />
+              <div>
+                <label className="text-sm font-medium text-gray-300 mb-2 block">이모지</label>
+                <div className="flex flex-wrap gap-2">
+                  {emojis.map((emoji) => (
+                    <button
+                      key={emoji}
+                      onClick={() => setForm({ ...form, emoji })}
+                      className={`w-10 h-10 rounded-lg text-xl flex items-center justify-center transition-all ${form.emoji === emoji ? "bg-indigo-600 scale-110 ring-2 ring-indigo-400" : "bg-gray-700/50 hover:bg-gray-600/50"}`}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-3 mt-2">
+                <Button variant="secondary" onClick={() => setShowModal(false)} className="flex-1">취소</Button>
+                <Button
+                  variant="primary"
+                  onClick={handleSave}
+                  disabled={!form.title.trim() || !form.targetDate}
+                  className="flex-1"
+                >
+                  {editingDday ? "수정" : "추가"}
+                </Button>
+              </div>
+            </div>
+          </Modal>
+        </div>
+      );
+    }
+
+    // ========================================
+    // 🔌 Rendering
+    // ========================================
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
