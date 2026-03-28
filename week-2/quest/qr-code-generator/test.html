@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>디버깅 테스트</title>
+  <style>
+    body {
+      background: #1e1e2e;
+      color: white;
+      font-family: sans-serif;
+      padding: 40px;
+    }
+    textarea {
+      display: block;
+      width: 300px;
+      height: 100px;
+      margin-bottom: 16px;
+      padding: 8px;
+      font-size: 14px;
+      background: #2a2a3c;
+      color: white;
+      border: 1px solid #555;
+      border-radius: 6px;
+    }
+    button {
+      padding: 10px 24px;
+      font-size: 14px;
+      background: #059669;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    #log {
+      margin-top: 20px;
+      font-size: 13px;
+      color: #aaa;
+    }
+  </style>
+</head>
+<body>
+  <h2>디버깅 테스트 페이지</h2>
+  <p style="color:#aaa; margin-bottom:20px;">이 페이지에서 textarea 클릭, 입력, 버튼 클릭 시 검은 배경이 뜨는지 확인하세요.</p>
+
+  <textarea id="input" placeholder="여기에 입력하세요"></textarea>
+  <button id="btn" onclick="document.getElementById('log').textContent = '버튼 클릭됨: ' + new Date().toLocaleTimeString()">테스트 버튼</button>
+
+  <div id="log"></div>
+</body>
+</html>

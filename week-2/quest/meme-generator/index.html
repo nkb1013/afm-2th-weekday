@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>짤 생성기</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');
+    body { font-family: 'Noto Sans KR', sans-serif; }
+  </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useRef, useEffect, useCallback } = React;
+
+    // ========================================
+    // 🎨 Design System Components
+    // ========================================
+
+    function Button({ children, onClick, variant = "primary", size = "md", disabled = false, className = "" }) {
+      const base = "font-bold rounded-lg transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed";
+      const variants = {
+        primary: "bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg hover:shadow-indigo-500/30",
+        secondary: "bg-gray-700 hover:bg-gray-600 text-gray-200",
+        danger: "bg-red-600 hover:bg-red-700 text-white",
+        ghost: "bg-transparent hover:bg-gray-800 text-gray-300",
+        success: "bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg hover:shadow-emerald-500/30",
+      };
+      const sizes = {
+        sm: "px-3 py-1.5 text-sm",
+        md: "px-5 py-2.5 text-base",
+        lg: "px-7 py-3.5 text-lg",
+      };
+      return (
+        <button onClick={onClick} disabled={disabled} className={`${base} ${variants[variant]} ${sizes[size]} ${className}`}>
+          {children}
+        </button>
+      );
+    }
+
+    function Input({ label, value, onChange, placeholder, className = "" }) {
+      return (
+        <div className={`flex flex-col gap-1.5 ${className}`}>
+          {label && <label className="text-sm font-medium text-gray-300">{label}</label>}
+          <input
+            type="text"
+            value={value}
+            onChange={onChange}
+            placeholder={placeholder}
+            className="bg-gray-800 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+          />
+        </div>
+      );
+    }
+
+    function Slider({ label, value, onChange, min, max, step = 1, unit = "", className = "" }) {
+      return (
+        <div className={`flex flex-col gap-1.5 ${className}`}>
+          <div className="flex justify-between items-center">
+            <label className="text-sm font-medium text-gray-300">{label}</label>
+            <span className="text-sm text-indigo-400 font-mono">{value}{unit}</span>
+          </div>
+          <input
+            type="range"
+            min={min}
+            max={max}
+            step={step}
+            value={value}
+            onChange={onChange}
+            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+          />
+        </div>
+      );
+    }
+
+    function ColorPicker({ label, value, onChange, className = "" }) {
+      return (
+        <div className={`flex items-center gap-3 ${className}`}>
+          <label className="text-sm font-medium text-gray-300">{label}</label>
+          <input
+            type="color"
+            value={value}
+            onChange={onChange}
+            className="w-8 h-8 rounded cursor-pointer border-0 bg-transparent"
+          />
+        </div>
+      );
+    }
+
+    // ========================================
+    // 📄 Meme Generator App
+    // ========================================
+
+    function MemeGenerator() {
+      const canvasRef = useRef(null);
+      const fileInputRef = useRef(null);
+      const [image, setImage] = useState(null);
+      const [topText, setTopText] = useState("");
+      const [bottomText, setBottomText] = useState("");
+      const [fontSize, setFontSize] = useState(48);
+      const [textColor, setTextColor] = useState("#ffffff");
+      const [strokeColor, setStrokeColor] = useState("#000000");
+      const [strokeWidth, setStrokeWidth] = useState(3);
+      const [canvasSize, setCanvasSize] = useState({ width: 600, height: 600 });
+
+      const handleImageUpload = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const img = new Image();
+        img.onload = () => {
+          const maxWidth = 800;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxWidth) {
+            height = (maxWidth / width) * height;
+            width = maxWidth;
+          }
+
+          setCanvasSize({ width, height });
+          setImage(img);
+        };
+        img.src = URL.createObjectURL(file);
+      };
+
+      const drawMeme = useCallback(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        const ctx = canvas.getContext("2d");
+        canvas.width = canvasSize.width;
+        canvas.height = canvasSize.height;
+
+        // 배경
+        ctx.fillStyle = "#1f2937";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // 이미지 그리기
+        if (image) {
+          ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+        }
+
+        // 텍스트 스타일 설정
+        ctx.font = `900 ${fontSize}px 'Noto Sans KR', Impact, sans-serif`;
+        ctx.textAlign = "center";
+        ctx.fillStyle = textColor;
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = strokeWidth;
+        ctx.lineJoin = "round";
+        ctx.miterLimit = 2;
+
+        const wrapText = (text, x, y, maxWidth, lineHeight, fromBottom = false) => {
+          if (!text) return;
+          const words = text.split("");
+          let line = "";
+          const lines = [];
+
+          for (let i = 0; i < words.length; i++) {
+            const testLine = line + words[i];
+            const metrics = ctx.measureText(testLine);
+            if (metrics.width > maxWidth && line.length > 0) {
+              lines.push(line);
+              line = words[i];
+            } else {
+              line = testLine;
+            }
+          }
+          lines.push(line);
+
+          let startY = y;
+          if (fromBottom) {
+            startY = y - (lines.length - 1) * lineHeight;
+          }
+
+          lines.forEach((l, idx) => {
+            const ly = startY + idx * lineHeight;
+            ctx.strokeText(l, x, ly);
+            ctx.fillText(l, x, ly);
+          });
+        };
+
+        const topPadding = fontSize * 1.4;
+        const bottomPadding = fontSize * 1.2;
+        const sidePadding = 60;
+        const maxWidth = canvas.width - sidePadding * 2;
+
+        // 상단 텍스트
+        wrapText(topText, canvas.width / 2, topPadding, maxWidth, fontSize * 1.2);
+
+        // 하단 텍스트
+        wrapText(bottomText, canvas.width / 2, canvas.height - bottomPadding, maxWidth, fontSize * 1.2, true);
+      }, [image, topText, bottomText, fontSize, textColor, strokeColor, strokeWidth, canvasSize]);
+
+      useEffect(() => {
+        drawMeme();
+      }, [drawMeme]);
+
+      const handleDownload = () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        const link = document.createElement("a");
+        link.download = "meme.png";
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+      };
+
+      const handleReset = () => {
+        setImage(null);
+        setTopText("");
+        setBottomText("");
+        setFontSize(48);
+        setTextColor("#ffffff");
+        setStrokeColor("#000000");
+        setStrokeWidth(3);
+        setCanvasSize({ width: 600, height: 600 });
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      };
+
+      const handleDrop = (e) => {
+        e.preventDefault();
+        const file = e.dataTransfer.files[0];
+        if (file && file.type.startsWith("image/")) {
+          const img = new Image();
+          img.onload = () => {
+            const maxWidth = 800;
+            let width = img.width;
+            let height = img.height;
+            if (width > maxWidth) {
+              height = (maxWidth / width) * height;
+              width = maxWidth;
+            }
+            setCanvasSize({ width, height });
+            setImage(img);
+          };
+          img.src = URL.createObjectURL(file);
+        }
+      };
+
+      const handleDragOver = (e) => {
+        e.preventDefault();
+      };
+
+      return (
+        <div className="max-w-5xl mx-auto px-4 py-8">
+          {/* 헤더 */}
+          <div className="text-center mb-10">
+            <h1 className="text-4xl font-black bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent mb-2">
+              짤 생성기
+            </h1>
+            <p className="text-gray-400">이미지를 업로드하고 텍스트를 입력하면 밈 이미지가 완성됩니다</p>
+          </div>
+
+          <div className="flex flex-col lg:flex-row gap-8">
+            {/* 좌측: 컨트롤 패널 */}
+            <div className="lg:w-80 flex-shrink-0 space-y-6">
+              {/* 이미지 업로드 */}
+              <div className="bg-gray-800/50 rounded-2xl p-5 border border-gray-700/50">
+                <h2 className="text-lg font-bold mb-4 text-gray-200">이미지 업로드</h2>
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  onDrop={handleDrop}
+                  onDragOver={handleDragOver}
+                  className="border-2 border-dashed border-gray-600 rounded-xl p-6 text-center cursor-pointer hover:border-indigo-500 hover:bg-gray-800/50 transition-all"
+                >
+                  <div className="text-4xl mb-2">🖼️</div>
+                  <p className="text-sm text-gray-400">클릭하거나 이미지를 드래그하세요</p>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="hidden"
+                  />
+                </div>
+              </div>
+
+              {/* 텍스트 입력 */}
+              <div className="bg-gray-800/50 rounded-2xl p-5 border border-gray-700/50">
+                <h2 className="text-lg font-bold mb-4 text-gray-200">텍스트 입력</h2>
+                <div className="space-y-4">
+                  <Input
+                    label="상단 텍스트"
+                    value={topText}
+                    onChange={(e) => setTopText(e.target.value)}
+                    placeholder="상단에 들어갈 문구"
+                  />
+                  <Input
+                    label="하단 텍스트"
+                    value={bottomText}
+                    onChange={(e) => setBottomText(e.target.value)}
+                    placeholder="하단에 들어갈 문구"
+                  />
+                </div>
+              </div>
+
+              {/* 스타일 설정 */}
+              <div className="bg-gray-800/50 rounded-2xl p-5 border border-gray-700/50">
+                <h2 className="text-lg font-bold mb-4 text-gray-200">스타일 설정</h2>
+                <div className="space-y-4">
+                  <Slider
+                    label="글자 크기"
+                    value={fontSize}
+                    onChange={(e) => setFontSize(Number(e.target.value))}
+                    min={16}
+                    max={96}
+                    unit="px"
+                  />
+                  <Slider
+                    label="테두리 두께"
+                    value={strokeWidth}
+                    onChange={(e) => setStrokeWidth(Number(e.target.value))}
+                    min={0}
+                    max={10}
+                    unit="px"
+                  />
+                  <div className="flex gap-6">
+                    <ColorPicker
+                      label="글자 색"
+                      value={textColor}
+                      onChange={(e) => setTextColor(e.target.value)}
+                    />
+                    <ColorPicker
+                      label="테두리 색"
+                      value={strokeColor}
+                      onChange={(e) => setStrokeColor(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 버튼 */}
+              <div className="flex gap-3">
+                <Button variant="success" size="lg" onClick={handleDownload} disabled={!image} className="flex-1">
+                  📥 다운로드
+                </Button>
+                <Button variant="danger" size="lg" onClick={handleReset} className="flex-1">
+                  🔄 초기화
+                </Button>
+              </div>
+            </div>
+
+            {/* 우측: 캔버스 미리보기 */}
+            <div className="flex-1 flex flex-col items-center">
+              <div className="bg-gray-800/30 rounded-2xl p-4 border border-gray-700/50 w-full">
+                <h2 className="text-lg font-bold mb-4 text-gray-200 text-center">미리보기</h2>
+                <div className="flex justify-center overflow-auto">
+                  <canvas
+                    ref={canvasRef}
+                    className="rounded-lg shadow-2xl max-w-full"
+                    style={{ maxHeight: "70vh" }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ========================================
+    // 🚀 App Component
+    // ========================================
+
+    function App() {
+      return <MemeGenerator />;
+    }
+
+    // ========================================
+    // Rendering
+    // ========================================
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
