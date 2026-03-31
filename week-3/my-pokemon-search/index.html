@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>포켓몬 도감 검색</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap');
+    body { font-family: 'Noto Sans KR', sans-serif; }
+    .pokeball-bg {
+      background-image: radial-gradient(circle at 50% 50%, transparent 30%, rgba(255,255,255,0.05) 30%, rgba(255,255,255,0.05) 32%, transparent 32%);
+      background-size: 120px 120px;
+    }
+    .card-shine {
+      background: linear-gradient(135deg, rgba(255,255,255,0.25) 0%, transparent 50%, rgba(255,255,255,0.1) 100%);
+    }
+    .stat-bar {
+      transition: width 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    }
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes bounce-in {
+      0% { transform: scale(0.3); opacity: 0; }
+      50% { transform: scale(1.05); }
+      70% { transform: scale(0.95); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .animate-fade-in-up { animation: fadeInUp 0.5s ease-out; }
+    .animate-bounce-in { animation: bounce-in 0.6s ease-out; }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useRef, useEffect } = React;
+
+    // ========================================
+    // API 설정
+    // ========================================
+    const API_BASE_URL = '/api';
+
+    // ========================================
+    // Type Color Map
+    // ========================================
+    const TYPE_COLORS = {
+      "풀":   { bg: "bg-emerald-500", light: "bg-emerald-100", text: "text-emerald-800", gradient: "from-emerald-400 to-teal-500", statBar: "bg-emerald-400" },
+      "독":   { bg: "bg-purple-500",  light: "bg-purple-100",  text: "text-purple-800",  gradient: "from-purple-400 to-purple-600", statBar: "bg-purple-400" },
+      "불꽃": { bg: "bg-orange-500",  light: "bg-orange-100",  text: "text-orange-800",  gradient: "from-orange-400 to-red-500", statBar: "bg-orange-400" },
+      "물":   { bg: "bg-blue-500",    light: "bg-blue-100",    text: "text-blue-800",    gradient: "from-blue-400 to-cyan-500", statBar: "bg-blue-400" },
+      "전기": { bg: "bg-yellow-500",  light: "bg-yellow-100",  text: "text-yellow-800",  gradient: "from-yellow-300 to-amber-500", statBar: "bg-yellow-400" },
+      "노말": { bg: "bg-gray-500",    light: "bg-gray-100",    text: "text-gray-800",    gradient: "from-gray-400 to-slate-500", statBar: "bg-gray-400" },
+    };
+
+    const STAT_LABELS = { hp: "HP", attack: "공격", defense: "방어", speed: "스피드" };
+
+    // ========================================
+    // Design System Components
+    // ========================================
+    function TypeBadge({ type }) {
+      const colors = TYPE_COLORS[type] || TYPE_COLORS["노말"];
+      return (
+        <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${colors.light} ${colors.text}`}>
+          {type}
+        </span>
+      );
+    }
+
+    function StatBar({ label, value, maxValue = 120, color }) {
+      const [width, setWidth] = useState(0);
+      useEffect(() => {
+        const timer = setTimeout(() => setWidth((value / maxValue) * 100), 100);
+        return () => clearTimeout(timer);
+      }, [value, maxValue]);
+
+      return (
+        <div className="flex items-center gap-3 mb-2">
+          <span className="text-sm font-medium text-gray-500 w-16 text-right">{label}</span>
+          <span className="text-sm font-bold text-gray-700 w-8 text-right">{value}</span>
+          <div className="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden">
+            <div
+              className={`stat-bar h-full rounded-full ${color}`}
+              style={{ width: `${width}%` }}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Pokemon Card Component
+    // ========================================
+    function PokemonCard({ pokemon }) {
+      const primaryType = pokemon.types[0];
+      const colors = TYPE_COLORS[primaryType] || TYPE_COLORS["노말"];
+
+      return (
+        <div className="animate-bounce-in max-w-md mx-auto">
+          <div className={`relative rounded-3xl overflow-hidden shadow-2xl bg-gradient-to-br ${colors.gradient}`}>
+            {/* Top section with image */}
+            <div className="relative pt-8 pb-4 px-8 pokeball-bg">
+              <div className="card-shine absolute inset-0 rounded-3xl pointer-events-none" />
+              <div className="flex justify-between items-start mb-4 relative z-10">
+                <div>
+                  <p className="text-white/70 text-sm font-bold">#{String(pokemon.id).padStart(3, '0')}</p>
+                  <h2 className="text-3xl font-black text-white">{pokemon.nameKo}</h2>
+                  <p className="text-white/60 text-sm font-medium">{pokemon.nameEn}</p>
+                </div>
+                <div className="flex gap-2 mt-1">
+                  {pokemon.types.map(type => (
+                    <span key={type} className="px-3 py-1 rounded-full text-xs font-bold bg-white/25 text-white backdrop-blur-sm">
+                      {type}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="flex justify-center relative z-10">
+                <img
+                  src={pokemon.image}
+                  alt={pokemon.nameKo}
+                  className="w-56 h-56 object-contain drop-shadow-2xl hover:scale-110 transition-transform duration-300"
+                />
+              </div>
+            </div>
+
+            {/* Bottom section with stats */}
+            <div className="bg-white rounded-t-3xl px-8 pt-6 pb-8 -mt-4 relative z-20">
+              <p className="text-gray-600 text-sm leading-relaxed mb-6">{pokemon.description}</p>
+
+              <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">기본 능력치</h3>
+              {Object.entries(pokemon.stats).map(([key, value]) => (
+                <StatBar
+                  key={key}
+                  label={STAT_LABELS[key]}
+                  value={value}
+                  color={colors.statBar}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Not Found Component
+    // ========================================
+    function NotFound({ query }) {
+      return (
+        <div className="animate-fade-in-up max-w-md mx-auto text-center py-16">
+          <div className="text-8xl mb-4">?</div>
+          <h2 className="text-2xl font-bold text-gray-700 mb-2">포켓몬을 찾을 수 없습니다</h2>
+          <p className="text-gray-500">
+            "<span className="font-semibold text-gray-700">{query}</span>"에 해당하는 포켓몬이 없습니다.
+          </p>
+          <p className="text-gray-400 text-sm mt-4">
+            검색 가능: 이상해씨, 파이리, 꼬부기, 피카츄, 이브이 (이름 또는 번호)
+          </p>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Quick Select Buttons
+    // ========================================
+    function QuickSelect({ pokemonList, onSelect }) {
+      return (
+        <div className="flex flex-wrap justify-center gap-2 mt-4">
+          {pokemonList.map(p => {
+            const colors = TYPE_COLORS[p.types[0]];
+            return (
+              <button
+                key={p.id}
+                onClick={() => onSelect(p.nameKo)}
+                className={`px-4 py-2 rounded-full text-sm font-semibold text-white bg-gradient-to-r ${colors.gradient} hover:shadow-lg hover:scale-105 transition-all duration-200`}
+              >
+                #{p.id} {p.nameKo}
+              </button>
+            );
+          })}
+        </div>
+      );
+    }
+
+    // ========================================
+    // App Component
+    // ========================================
+    function App() {
+      const [query, setQuery] = useState("");
+      const [searchResult, setSearchResult] = useState(null);
+      const [hasSearched, setHasSearched] = useState(false);
+      const [loading, setLoading] = useState(false);
+      const [pokemonList, setPokemonList] = useState([]);
+      const inputRef = useRef(null);
+
+      // 전체 포켓몬 목록 불러오기 (빠른 선택 버튼용)
+      useEffect(() => {
+        fetch(`${API_BASE_URL}/pokemon`)
+          .then(res => res.json())
+          .then(data => setPokemonList(data))
+          .catch(err => console.error("목록 로딩 실패:", err));
+      }, []);
+
+      const handleSearch = (searchQuery) => {
+        const q = (searchQuery !== undefined ? searchQuery : query).trim();
+        if (!q) return;
+
+        if (searchQuery !== undefined) setQuery(q);
+
+        setLoading(true);
+        setHasSearched(true);
+
+        fetch(`${API_BASE_URL}/pokemon/search?q=${encodeURIComponent(q)}`)
+          .then(res => {
+            if (!res.ok) return null;
+            return res.json();
+          })
+          .then(data => {
+            setSearchResult(data && !data.error ? data : null);
+          })
+          .catch(() => {
+            setSearchResult(null);
+          })
+          .finally(() => {
+            setLoading(false);
+          });
+      };
+
+      const handleKeyDown = (e) => {
+        if (e.key === "Enter") handleSearch();
+      };
+
+      const handleQuickSelect = (name) => {
+        setQuery(name);
+        handleSearch(name);
+      };
+
+      useEffect(() => {
+        inputRef.current?.focus();
+      }, []);
+
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-200 py-8 px-4">
+          {/* Header */}
+          <div className="text-center mb-10 animate-fade-in-up">
+            <h1 className="text-4xl sm:text-5xl font-black text-gray-800 mb-2">
+              포켓몬 도감
+            </h1>
+            <p className="text-gray-500">이름이나 번호로 포켓몬을 검색하세요</p>
+          </div>
+
+          {/* Search */}
+          <div className="max-w-lg mx-auto mb-10">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="피카츄 또는 25"
+                  className="w-full px-6 py-4 rounded-2xl border-2 border-gray-200 focus:border-blue-400 focus:outline-none text-lg shadow-sm bg-white transition-colors"
+                  aria-label="포켓몬 검색"
+                />
+              </div>
+              <button
+                onClick={() => handleSearch()}
+                className="px-8 py-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-bold rounded-2xl shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200"
+              >
+                검색
+              </button>
+            </div>
+            <QuickSelect pokemonList={pokemonList} onSelect={handleQuickSelect} />
+          </div>
+
+          {/* Result */}
+          <div className="max-w-lg mx-auto">
+            {loading && (
+              <div className="text-center py-16 animate-fade-in-up">
+                <div className="text-5xl mb-4 animate-spin">⚡</div>
+                <p className="text-gray-400 text-lg">검색 중...</p>
+              </div>
+            )}
+            {!loading && hasSearched && searchResult && <PokemonCard pokemon={searchResult} />}
+            {!loading && hasSearched && !searchResult && <NotFound query={query} />}
+            {!hasSearched && (
+              <div className="text-center py-16 animate-fade-in-up">
+                <div className="text-7xl mb-4 opacity-30">&#x1F50D;</div>
+                <p className="text-gray-400 text-lg">위에서 포켓몬을 검색해보세요!</p>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Rendering
+    // ========================================
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

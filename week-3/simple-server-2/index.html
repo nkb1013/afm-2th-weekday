@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Secret Message</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');
+
+    body {
+      font-family: 'Noto Sans KR', sans-serif;
+      background: #0a0a0f;
+      overflow: hidden;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      10%, 30%, 50%, 70%, 90% { transform: translateX(-6px); }
+      20%, 40%, 60%, 80% { transform: translateX(6px); }
+    }
+
+    @keyframes revealMessage {
+      0% {
+        opacity: 0;
+        transform: scale(0.3) translateY(30px);
+        filter: blur(20px);
+      }
+      50% {
+        opacity: 0.7;
+        transform: scale(1.05) translateY(-5px);
+        filter: blur(3px);
+      }
+      100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+        filter: blur(0);
+      }
+    }
+
+    @keyframes lockPulse {
+      0%, 100% { text-shadow: 0 0 10px rgba(139, 92, 246, 0.5); }
+      50% { text-shadow: 0 0 30px rgba(139, 92, 246, 0.9), 0 0 60px rgba(139, 92, 246, 0.4); }
+    }
+
+    @keyframes unlockGlow {
+      0% { text-shadow: 0 0 20px rgba(52, 211, 153, 0.8); }
+      50% { text-shadow: 0 0 50px rgba(52, 211, 153, 1), 0 0 80px rgba(52, 211, 153, 0.5); }
+      100% { text-shadow: 0 0 20px rgba(52, 211, 153, 0.8); }
+    }
+
+    @keyframes particleDrift {
+      0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+      100% { transform: translateY(-120px) rotate(360deg); opacity: 0; }
+    }
+
+    @keyframes bgPulse {
+      0%, 100% { opacity: 0.03; }
+      50% { opacity: 0.07; }
+    }
+
+    @keyframes scanline {
+      0% { top: -10%; }
+      100% { top: 110%; }
+    }
+
+    @keyframes typeReveal {
+      from { max-height: 0; opacity: 0; }
+      to { max-height: 500px; opacity: 1; }
+    }
+
+    .shake { animation: shake 0.5s ease-in-out; }
+    .reveal { animation: revealMessage 1s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    .lock-pulse { animation: lockPulse 2s ease-in-out infinite; }
+    .unlock-glow { animation: unlockGlow 1.5s ease-in-out infinite; }
+
+    .scanline::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.15), transparent);
+      animation: scanline 4s linear infinite;
+      pointer-events: none;
+    }
+
+    .input-glow:focus {
+      box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.4), 0 0 30px rgba(139, 92, 246, 0.15);
+    }
+
+    .btn-glow:hover {
+      box-shadow: 0 0 25px rgba(139, 92, 246, 0.4);
+    }
+
+    .particle {
+      position: absolute;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: rgba(52, 211, 153, 0.8);
+      animation: particleDrift 1.5s ease-out forwards;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    // ========================================
+    // React Hooks
+    // ========================================
+    const { useState, useRef, useEffect, useCallback } = React;
+
+    // ========================================
+    // API Configuration
+    // ========================================
+    const API_BASE_URL = '/api';
+
+    // ========================================
+    // Particle Effect Component
+    // ========================================
+    function Particles({ active }) {
+      const [particles, setParticles] = useState([]);
+
+      useEffect(() => {
+        if (!active) return;
+        const newParticles = Array.from({ length: 20 }, (_, i) => ({
+          id: Date.now() + i,
+          left: Math.random() * 100,
+          delay: Math.random() * 0.5,
+          size: 2 + Math.random() * 4,
+        }));
+        setParticles(newParticles);
+        const timer = setTimeout(() => setParticles([]), 2000);
+        return () => clearTimeout(timer);
+      }, [active]);
+
+      return (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          {particles.map((p) => (
+            <div
+              key={p.id}
+              className="particle"
+              style={{
+                left: `${p.left}%`,
+                bottom: '40%',
+                width: `${p.size}px`,
+                height: `${p.size}px`,
+                animationDelay: `${p.delay}s`,
+              }}
+            />
+          ))}
+        </div>
+      );
+    }
+
+    // ========================================
+    // Background Grid Component
+    // ========================================
+    function BackgroundGrid() {
+      return (
+        <div className="fixed inset-0 pointer-events-none" style={{ zIndex: 0 }}>
+          <div
+            className="absolute inset-0"
+            style={{
+              backgroundImage:
+                'linear-gradient(rgba(139, 92, 246, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(139, 92, 246, 0.03) 1px, transparent 1px)',
+              backgroundSize: '50px 50px',
+              animation: 'bgPulse 6s ease-in-out infinite',
+            }}
+          />
+          <div
+            className="absolute inset-0"
+            style={{
+              background: 'radial-gradient(ellipse at 50% 50%, rgba(139, 92, 246, 0.05) 0%, transparent 70%)',
+            }}
+          />
+        </div>
+      );
+    }
+
+    // ========================================
+    // App Component
+    // ========================================
+    function App() {
+      const [password, setPassword] = useState('');
+      const [status, setStatus] = useState('idle'); // idle | loading | success | error
+      const [message, setMessage] = useState('');
+      const [shaking, setShaking] = useState(false);
+      const [showParticles, setShowParticles] = useState(false);
+      const inputRef = useRef(null);
+      const formRef = useRef(null);
+
+      const handleSubmit = useCallback(async (e) => {
+        e.preventDefault();
+        if (!password.trim() || status === 'loading') return;
+
+        setStatus('loading');
+        setMessage('');
+
+        try {
+          const res = await fetch(`${API_BASE_URL}/secret`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password }),
+          });
+
+          const data = await res.json();
+
+          if (data.success) {
+            setStatus('success');
+            setMessage(data.message);
+            setShowParticles(true);
+            setTimeout(() => setShowParticles(false), 100);
+          } else {
+            setStatus('error');
+            setMessage(data.message);
+            setShaking(true);
+            setTimeout(() => setShaking(false), 500);
+            setTimeout(() => {
+              setStatus('idle');
+              setMessage('');
+              inputRef.current?.focus();
+            }, 2500);
+          }
+        } catch (err) {
+          setStatus('error');
+          setMessage('서버에 연결할 수 없습니다.');
+          setShaking(true);
+          setTimeout(() => setShaking(false), 500);
+          setTimeout(() => {
+            setStatus('idle');
+            setMessage('');
+          }, 3000);
+        }
+      }, [password, status]);
+
+      const handleReset = () => {
+        setPassword('');
+        setStatus('idle');
+        setMessage('');
+        inputRef.current?.focus();
+      };
+
+      const lockIcon = status === 'success' ? '\uD83D\uDD13' : '\uD83D\uDD12';
+      const lockClass = status === 'success' ? 'unlock-glow' : 'lock-pulse';
+
+      return (
+        <div className="relative min-h-screen flex items-center justify-center p-4 scanline">
+          <BackgroundGrid />
+          <Particles active={showParticles} />
+
+          <div className="relative z-10 w-full max-w-md">
+            {/* Header */}
+            <div className="text-center mb-8">
+              <div className={`text-7xl mb-4 ${lockClass} select-none`} role="img" aria-label="lock">
+                {lockIcon}
+              </div>
+              <h1 className="text-3xl font-black text-white tracking-wider mb-2">
+                SECRET MESSAGE
+              </h1>
+              <p className="text-violet-400/70 text-sm tracking-widest uppercase">
+                Classified Information
+              </p>
+            </div>
+
+            {/* Main Card */}
+            <div
+              ref={formRef}
+              className={`
+                bg-gray-900/80 backdrop-blur-xl border border-violet-500/20
+                rounded-2xl p-8 shadow-2xl shadow-violet-500/5
+                ${shaking ? 'shake' : ''}
+              `}
+            >
+              {status !== 'success' ? (
+                <>
+                  <p className="text-gray-400 text-center mb-6 text-sm">
+                    비밀 메시지에 접근하려면 암호를 입력하세요.
+                  </p>
+
+                  <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="relative">
+                      <input
+                        ref={inputRef}
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="암호를 입력하세요..."
+                        disabled={status === 'loading'}
+                        autoFocus
+                        className={`
+                          input-glow w-full px-5 py-4 rounded-xl
+                          bg-gray-800/90 border text-white text-center text-lg
+                          tracking-widest placeholder-gray-600
+                          outline-none transition-all duration-300
+                          disabled:opacity-50 disabled:cursor-not-allowed
+                          ${status === 'error'
+                            ? 'border-red-500/60'
+                            : 'border-violet-500/30 focus:border-violet-500/60'
+                          }
+                        `}
+                        aria-label="비밀번호 입력"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={!password.trim() || status === 'loading'}
+                      className={`
+                        btn-glow w-full py-4 rounded-xl font-bold text-lg
+                        tracking-wider uppercase transition-all duration-300
+                        disabled:opacity-30 disabled:cursor-not-allowed
+                        ${status === 'loading'
+                          ? 'bg-violet-700 text-violet-200 cursor-wait'
+                          : 'bg-violet-600 hover:bg-violet-500 text-white'
+                        }
+                      `}
+                    >
+                      {status === 'loading' ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                          해독 중...
+                        </span>
+                      ) : (
+                        '접근 시도'
+                      )}
+                    </button>
+                  </form>
+
+                  {/* Error Message */}
+                  {status === 'error' && message && (
+                    <div className="mt-5 text-center">
+                      <p className="text-red-400 text-sm font-medium animate-pulse">
+                        {message}
+                      </p>
+                      <div className="mt-2 h-0.5 bg-red-500/30 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-red-500 rounded-full"
+                          style={{
+                            animation: 'shrink 2.5s linear forwards',
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                /* Success: Revealed Message */
+                <div className="reveal">
+                  <div className="text-center mb-4">
+                    <p className="text-emerald-400 text-sm font-bold tracking-widest uppercase mb-1">
+                      Access Granted
+                    </p>
+                    <div className="h-px bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
+                  </div>
+
+                  <div className="mt-6 p-6 bg-emerald-500/5 border border-emerald-500/20 rounded-xl">
+                    <p className="text-white text-lg leading-relaxed text-center font-medium">
+                      {message}
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={handleReset}
+                    className="
+                      mt-6 w-full py-3 rounded-xl
+                      bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white
+                      border border-gray-700/50 hover:border-gray-600
+                      transition-all duration-300 text-sm tracking-wider uppercase
+                    "
+                  >
+                    다시 시도
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <p className="text-center text-gray-700 text-xs mt-6 tracking-widest uppercase">
+              Encrypted Channel &bull; Secure Connection
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Rendering
+    // ========================================
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

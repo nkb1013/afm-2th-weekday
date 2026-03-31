@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Secret Message</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap');
+
+    * { font-family: 'Noto Sans KR', sans-serif; }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      10%, 30%, 50%, 70%, 90% { transform: translateX(-6px); }
+      20%, 40%, 60%, 80% { transform: translateX(6px); }
+    }
+
+    @keyframes unlockBounce {
+      0% { transform: scale(1); }
+      20% { transform: scale(1.3); }
+      40% { transform: scale(0.9); }
+      60% { transform: scale(1.1); }
+      80% { transform: scale(0.95); }
+      100% { transform: scale(1); }
+    }
+
+    @keyframes fadeSlideUp {
+      from { opacity: 0; transform: translateY(40px) scale(0.95); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    @keyframes glowPulse {
+      0%, 100% { box-shadow: 0 0 20px rgba(139, 92, 246, 0.3), 0 0 60px rgba(139, 92, 246, 0.1); }
+      50% { box-shadow: 0 0 40px rgba(139, 92, 246, 0.6), 0 0 100px rgba(139, 92, 246, 0.2); }
+    }
+
+    @keyframes particleFly {
+      0% { opacity: 1; transform: translate(0, 0) scale(1); }
+      100% { opacity: 0; transform: translate(var(--tx), var(--ty)) scale(0); }
+    }
+
+    @keyframes typewriter {
+      from { width: 0; }
+      to { width: 100%; }
+    }
+
+    @keyframes blink {
+      50% { border-color: transparent; }
+    }
+
+    @keyframes bgShift {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    .shake { animation: shake 0.5s ease-in-out; }
+    .unlock-bounce { animation: unlockBounce 0.6s ease-out; }
+    .fade-slide-up { animation: fadeSlideUp 0.8s ease-out forwards; }
+    .glow-pulse { animation: glowPulse 2s ease-in-out infinite; }
+
+    .particle {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      animation: particleFly 1s ease-out forwards;
+    }
+
+    .bg-animated {
+      background: linear-gradient(-45deg, #0f0c29, #302b63, #24243e, #1a1a2e);
+      background-size: 400% 400%;
+      animation: bgShift 15s ease infinite;
+    }
+
+    .secret-text {
+      overflow: hidden;
+      white-space: nowrap;
+      border-right: 3px solid #a78bfa;
+      animation: typewriter 2s steps(30) 0.5s forwards, blink 0.7s step-end 2s infinite;
+      width: 0;
+    }
+
+    input::-ms-reveal,
+    input::-ms-clear { display: none; }
+  </style>
+</head>
+<body class="bg-animated min-h-screen">
+  <div id="root"></div>
+  <script type="text/babel">
+    // ========================================
+    // React Hooks Destructuring
+    // ========================================
+    const { useState, useRef, useEffect, useCallback } = React;
+
+    // ========================================
+    // Design System Components
+    // ========================================
+
+    function Card({ children, className = '' }) {
+      return (
+        <div className={`bg-gray-900/80 backdrop-blur-xl border border-gray-700/50 rounded-2xl p-8 shadow-2xl ${className}`}>
+          {children}
+        </div>
+      );
+    }
+
+    function Button({ children, onClick, disabled, variant = 'primary', size = 'md', className = '' }) {
+      const base = 'font-semibold rounded-xl transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed';
+      const variants = {
+        primary: 'bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 active:scale-95',
+        ghost: 'bg-transparent text-gray-400 hover:text-white hover:bg-gray-800',
+      };
+      const sizes = {
+        sm: 'px-4 py-2 text-sm',
+        md: 'px-6 py-3 text-base',
+        lg: 'px-8 py-4 text-lg',
+      };
+      return (
+        <button onClick={onClick} disabled={disabled} className={`${base} ${variants[variant]} ${sizes[size]} ${className}`}>
+          {children}
+        </button>
+      );
+    }
+
+    function Input({ type = 'text', value, onChange, placeholder, error, onKeyDown, className = '', inputRef }) {
+      return (
+        <input
+          ref={inputRef}
+          type={type}
+          value={value}
+          onChange={onChange}
+          onKeyDown={onKeyDown}
+          placeholder={placeholder}
+          className={`w-full bg-gray-800/60 border-2 ${error ? 'border-red-500' : 'border-gray-600 focus:border-violet-500'} rounded-xl px-5 py-4 text-white text-lg placeholder-gray-500 outline-none transition-all duration-300 tracking-widest ${className}`}
+        />
+      );
+    }
+
+    // ========================================
+    // Particle Explosion Component
+    // ========================================
+
+    function Particles({ show }) {
+      if (!show) return null;
+
+      const colors = ['#a78bfa', '#c084fc', '#e879f9', '#f0abfc', '#fbbf24', '#34d399'];
+      const particles = Array.from({ length: 24 }, (_, i) => {
+        const angle = (i / 24) * 360;
+        const distance = 80 + Math.random() * 120;
+        const tx = Math.cos((angle * Math.PI) / 180) * distance;
+        const ty = Math.sin((angle * Math.PI) / 180) * distance;
+        const color = colors[i % colors.length];
+        const size = 4 + Math.random() * 8;
+        const delay = Math.random() * 0.3;
+        return (
+          <div
+            key={i}
+            className="particle"
+            style={{
+              '--tx': `${tx}px`,
+              '--ty': `${ty}px`,
+              backgroundColor: color,
+              width: size,
+              height: size,
+              animationDelay: `${delay}s`,
+              left: '50%',
+              top: '50%',
+            }}
+          />
+        );
+      });
+
+      return <div className="absolute inset-0 pointer-events-none overflow-hidden">{particles}</div>;
+    }
+
+    // ========================================
+    // Lock Icon Component
+    // ========================================
+
+    function LockIcon({ unlocked }) {
+      return (
+        <div className={`relative text-8xl mb-6 select-none ${unlocked ? 'unlock-bounce' : ''}`}>
+          <span className="block transition-all duration-500" style={{ filter: unlocked ? 'drop-shadow(0 0 20px rgba(52, 211, 153, 0.8))' : 'drop-shadow(0 0 10px rgba(139, 92, 246, 0.5))' }}>
+            {unlocked ? '\uD83D\uDD13' : '\uD83D\uDD12'}
+          </span>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Secret Message Reveal Component
+    // ========================================
+
+    function SecretReveal({ show }) {
+      const [showText, setShowText] = useState(false);
+
+      useEffect(() => {
+        if (show) {
+          const timer = setTimeout(() => setShowText(true), 600);
+          return () => clearTimeout(timer);
+        }
+        setShowText(false);
+      }, [show]);
+
+      if (!show) return null;
+
+      return (
+        <div className="fade-slide-up mt-8">
+          <div className="glow-pulse bg-gradient-to-br from-violet-900/50 to-purple-900/50 border border-violet-500/30 rounded-2xl p-8 relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-violet-500/5 to-transparent" />
+            <p className="text-violet-300 text-sm font-medium mb-3 tracking-wider uppercase relative z-10">
+              Secret Message Unlocked
+            </p>
+            {showText && (
+              <div className="relative z-10">
+                <p className="secret-text text-2xl sm:text-3xl font-bold text-white leading-relaxed">
+                  \uD83D\uDD13 \uBE44\uBC00 \uBA54\uC2DC\uC9C0: \uB2F9\uC2E0\uC740 \uC120\uD0DD\uBC1B\uC740 \uC790\uC785\uB2C8\uB2E4.
+                </p>
+              </div>
+            )}
+            {showText && (
+              <div className="fade-slide-up mt-6 pt-4 border-t border-violet-500/20 relative z-10" style={{ animationDelay: '2.5s', opacity: 0 }}>
+                <p className="text-violet-200/70 text-base leading-relaxed">
+                  \uC774 \uBA54\uC2DC\uC9C0\uB97C \uBCF8 \uB2F9\uC2E0\uC740 \uC9C4\uC815\uD55C \uD574\uCEE4\uC785\uB2C8\uB2E4. \uD83D\uDE0E
+                  <br />
+                  <span className="text-sm text-violet-300/50 mt-2 block">\uC554\uD638 \uD574\uB3C5 \uC644\uB8CC \u2022 \uBCF4\uC548 \uB4F1\uAE09: \uCD5C\uACE0 \uAE30\uBC00</span>
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Password Attempt Dots
+    // ========================================
+
+    function AttemptDots({ attempts, maxAttempts }) {
+      return (
+        <div className="flex gap-2 justify-center mt-4">
+          {Array.from({ length: maxAttempts }, (_, i) => (
+            <div
+              key={i}
+              className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
+                i < attempts ? 'bg-red-500 scale-110' : 'bg-gray-600'
+              }`}
+            />
+          ))}
+        </div>
+      );
+    }
+
+    // ========================================
+    // Main Page Component
+    // ========================================
+
+    function PasswordPage() {
+      const [password, setPassword] = useState('');
+      const [unlocked, setUnlocked] = useState(false);
+      const [error, setError] = useState('');
+      const [shaking, setShaking] = useState(false);
+      const [attempts, setAttempts] = useState(0);
+      const [showParticles, setShowParticles] = useState(false);
+      const inputRef = useRef(null);
+      const maxAttempts = 5;
+
+      const SECRET_PASSWORD = '1234';
+
+      const handleSubmit = useCallback(() => {
+        if (!password.trim() || unlocked) return;
+
+        if (password === SECRET_PASSWORD) {
+          setError('');
+          setUnlocked(true);
+          setShowParticles(true);
+          setTimeout(() => setShowParticles(false), 1200);
+        } else {
+          setAttempts(prev => prev + 1);
+          setError(
+            attempts + 1 >= maxAttempts
+              ? '\uC2DC\uB3C4 \uD69F\uC218\uB97C \uCD08\uACFC\uD588\uC2B5\uB2C8\uB2E4. \uD398\uC774\uC9C0\uB97C \uC0C8\uB85C\uACE0\uCE68 \uD574\uC8FC\uC138\uC694.'
+              : `\uC798\uBABB\uB41C \uBE44\uBC00\uBC88\uD638\uC785\uB2C8\uB2E4. (${maxAttempts - attempts - 1}\uD68C \uB0A8\uC74C)`
+          );
+          setShaking(true);
+          setPassword('');
+          setTimeout(() => setShaking(false), 500);
+          inputRef.current?.focus();
+        }
+      }, [password, unlocked, attempts]);
+
+      const handleKeyDown = (e) => {
+        if (e.key === 'Enter') handleSubmit();
+      };
+
+      const isLocked = attempts >= maxAttempts && !unlocked;
+
+      return (
+        <div className="min-h-screen flex items-center justify-center p-4">
+          <div className="w-full max-w-md relative">
+            <Particles show={showParticles} />
+
+            <Card className={`text-center relative ${shaking ? 'shake' : ''}`}>
+              <LockIcon unlocked={unlocked} />
+
+              <h1 className="text-2xl font-bold text-white mb-2">
+                {unlocked ? '\uC811\uADFC \uD5C8\uAC00\uB428' : '\uBE44\uBC00 \uBA54\uC2DC\uC9C0'}
+              </h1>
+              <p className="text-gray-400 text-sm mb-8">
+                {unlocked
+                  ? '\uC778\uC99D\uC5D0 \uC131\uACF5\uD588\uC2B5\uB2C8\uB2E4'
+                  : '\uBE44\uBC00\uBC88\uD638\uB97C \uC785\uB825\uD558\uC5EC \uBA54\uC2DC\uC9C0\uB97C \uD655\uC778\uD558\uC138\uC694'}
+              </p>
+
+              {!unlocked && (
+                <div className="space-y-4">
+                  <Input
+                    type="password"
+                    value={password}
+                    onChange={(e) => { setPassword(e.target.value); setError(''); }}
+                    onKeyDown={handleKeyDown}
+                    placeholder="\uBE44\uBC00\uBC88\uD638 \uC785\uB825"
+                    error={!!error}
+                    inputRef={inputRef}
+                    className={isLocked ? 'opacity-50 pointer-events-none' : ''}
+                  />
+
+                  {error && (
+                    <p className="text-red-400 text-sm animate-pulse">{error}</p>
+                  )}
+
+                  <Button
+                    onClick={handleSubmit}
+                    disabled={!password.trim() || isLocked}
+                    size="lg"
+                    className="w-full"
+                  >
+                    {isLocked ? '\uC7A0\uAE40' : '\uD655\uC778'}
+                  </Button>
+
+                  <AttemptDots attempts={attempts} maxAttempts={maxAttempts} />
+                </div>
+              )}
+
+              {unlocked && (
+                <div className="inline-flex items-center gap-2 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-4 py-2 rounded-full text-sm font-medium">
+                  <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
+                  \uC778\uC99D \uC644\uB8CC
+                </div>
+              )}
+
+              <SecretReveal show={unlocked} />
+            </Card>
+
+            <p className="text-center text-gray-600 text-xs mt-6">
+              \uD78C\uD2B8: \uBE44\uBC00\uBC88\uD638\uB294 4\uC790\uB9AC \uC22B\uC790\uC785\uB2C8\uB2E4
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    // ========================================
+    // App Component
+    // ========================================
+
+    function App() {
+      return <PasswordPage />;
+    }
+
+    // ========================================
+    // Rendering
+    // ========================================
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
