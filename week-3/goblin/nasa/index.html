@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NASA 오늘의 우주 사진</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            serif: ['"Georgia"', '"Times New Roman"', 'serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;700;900&display=swap');
+    @keyframes fade-in {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @keyframes slide-up {
+      from { opacity: 0; transform: translateY(40px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes twinkle {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 1; }
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .fade-in { animation: fade-in 1s ease-out; }
+    .slide-up { animation: slide-up 0.8s ease-out both; }
+    .slide-up-delay-1 { animation: slide-up 0.8s 0.2s ease-out both; }
+    .slide-up-delay-2 { animation: slide-up 0.8s 0.4s ease-out both; }
+    .slide-up-delay-3 { animation: slide-up 0.8s 0.6s ease-out both; }
+    .star { animation: twinkle 3s ease-in-out infinite; }
+    .spin { animation: spin 1s linear infinite; }
+    .magazine-drop-cap::first-letter {
+      float: left;
+      font-size: 3.5rem;
+      line-height: 1;
+      padding-right: 0.5rem;
+      font-weight: 900;
+      color: #3b82f6;
+    }
+    .serif { font-family: 'Noto Serif KR', Georgia, serif; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useCallback, useRef } = React;
+
+    // ========================================
+    // 🗂️ NASA APOD API
+    // ========================================
+    const NASA_API_KEY = "jpkRi6bL1w8pce1LzV4bfb4iEq8F3aUTC8HVGlk1";
+    const APOD_BASE = "https://api.nasa.gov/planetary/apod";
+
+    // ========================================
+    // 🌐 번역 (MyMemory 무료 API)
+    // ========================================
+    const translationCache = {};
+
+    async function translateToKo(text) {
+      if (!text) return "";
+      if (translationCache[text]) return translationCache[text];
+
+      // 긴 텍스트는 문장 단위로 분할 (MyMemory 500자 제한)
+      const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+      const chunks = [];
+      let current = "";
+
+      for (const sentence of sentences) {
+        if ((current + sentence).length > 450) {
+          if (current) chunks.push(current.trim());
+          current = sentence;
+        } else {
+          current += sentence;
+        }
+      }
+      if (current.trim()) chunks.push(current.trim());
+
+      const translated = [];
+      for (const chunk of chunks) {
+        try {
+          const res = await fetch(
+            `https://api.mymemory.translated.net/get?q=${encodeURIComponent(chunk)}&langpair=en|ko`
+          );
+          const data = await res.json();
+          if (data.responseStatus === 200 && data.responseData.translatedText) {
+            translated.push(data.responseData.translatedText);
+          } else {
+            translated.push(chunk);
+          }
+        } catch {
+          translated.push(chunk);
+        }
+      }
+
+      const result = translated.join(" ");
+      translationCache[text] = result;
+      return result;
+    }
+
+    // 오늘 날짜 (YYYY-MM-DD)
+    function todayStr() {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    }
+
+    // 날짜 계산 (N일 전)
+    function daysAgo(n) {
+      const d = new Date();
+      d.setDate(d.getDate() - n);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    }
+
+    // 오늘의 APOD 가져오기
+    async function fetchApod(date) {
+      const url = date
+        ? `${APOD_BASE}?api_key=${NASA_API_KEY}&date=${date}`
+        : `${APOD_BASE}?api_key=${NASA_API_KEY}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("APOD fetch failed");
+      return await res.json();
+    }
+
+    // 최근 N일간 APOD 가져오기 (오늘 포함)
+    async function fetchRecentApods(count) {
+      const start = daysAgo(count - 1);
+      const end = todayStr();
+      const url = `${APOD_BASE}?api_key=${NASA_API_KEY}&start_date=${start}&end_date=${end}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("APOD range fetch failed");
+      const data = await res.json();
+      // 최신순 정렬
+      return data.reverse();
+    }
+
+    // ========================================
+    // 🎨 Design System Components
+    // ========================================
+    function StarField() {
+      const stars = Array.from({ length: 60 }, (_, i) => ({
+        id: i,
+        left: `${Math.random() * 100}%`,
+        top: `${Math.random() * 100}%`,
+        size: Math.random() * 2 + 1,
+        delay: `${Math.random() * 5}s`,
+        duration: `${Math.random() * 3 + 2}s`,
+      }));
+
+      return (
+        <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+          {stars.map((s) => (
+            <div
+              key={s.id}
+              className="absolute rounded-full bg-white star"
+              style={{
+                left: s.left, top: s.top,
+                width: s.size, height: s.size,
+                animationDelay: s.delay,
+                animationDuration: s.duration,
+              }}
+            />
+          ))}
+        </div>
+      );
+    }
+
+    function Divider() {
+      return (
+        <div className="flex items-center gap-4 my-8">
+          <div className="flex-1 h-px bg-gradient-to-r from-transparent via-blue-400/30 to-transparent" />
+          <span className="text-blue-300/50 text-lg">✦</span>
+          <div className="flex-1 h-px bg-gradient-to-r from-transparent via-blue-400/30 to-transparent" />
+        </div>
+      );
+    }
+
+    function DateBadge({ date }) {
+      const d = new Date(date + "T00:00:00");
+      const formatted = `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
+      const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
+      return (
+        <span className="inline-block bg-blue-500/20 text-blue-300 text-sm px-4 py-1.5 rounded-full border border-blue-500/30 font-medium">
+          {formatted} ({dayNames[d.getDay()]}요일)
+        </span>
+      );
+    }
+
+    function Spinner({ message }) {
+      return (
+        <div className="flex flex-col items-center justify-center py-32">
+          <div className="w-12 h-12 border-4 border-blue-400/20 border-t-blue-400 rounded-full spin mb-4" />
+          <p className="text-gray-500 text-sm">{message || "불러오는 중..."}</p>
+        </div>
+      );
+    }
+
+    function ErrorMessage({ message, onRetry }) {
+      return (
+        <div className="text-center py-32">
+          <p className="text-5xl mb-4">🛸</p>
+          <p className="text-gray-400 text-lg font-medium mb-2">데이터를 불러올 수 없습니다</p>
+          <p className="text-gray-600 text-sm mb-6">{message}</p>
+          {onRetry && (
+            <button
+              onClick={onRetry}
+              className="px-6 py-2 bg-blue-500/20 text-blue-300 rounded-full border border-blue-500/30 hover:bg-blue-500/30 transition-all text-sm"
+            >
+              다시 시도
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    // ========================================
+    // 📰 메인 APOD 카드 (잡지 스타일)
+    // ========================================
+    function ApodMagazine({ apod }) {
+      const [imgLoaded, setImgLoaded] = useState(false);
+      const [lang, setLang] = useState("ko"); // "ko" | "en"
+      const [koTitle, setKoTitle] = useState("");
+      const [koExplanation, setKoExplanation] = useState("");
+      const [translating, setTranslating] = useState(false);
+      const isVideo = apod.media_type === "video";
+
+      // 날짜(apod) 바뀔 때마다 자동 번역
+      useEffect(() => {
+        let cancelled = false;
+        setKoTitle("");
+        setKoExplanation("");
+        setTranslating(true);
+
+        Promise.all([
+          translateToKo(apod.title),
+          translateToKo(apod.explanation),
+        ]).then(([title, explanation]) => {
+          if (!cancelled) {
+            setKoTitle(title);
+            setKoExplanation(explanation);
+            setTranslating(false);
+          }
+        }).catch(() => {
+          if (!cancelled) setTranslating(false);
+        });
+
+        return () => { cancelled = true; };
+      }, [apod.date]);
+
+      const displayTitle = lang === "ko" && koTitle ? koTitle : apod.title;
+      const displayExplanation = lang === "ko" && koExplanation ? koExplanation : apod.explanation;
+
+      return (
+        <article className="slide-up">
+          {/* 히어로 미디어 */}
+          <div className="relative rounded-2xl overflow-hidden shadow-2xl shadow-blue-900/50 mb-8 group">
+            {isVideo ? (
+              <div className="aspect-video bg-black">
+                <iframe
+                  src={apod.url}
+                  title={apod.title}
+                  className="w-full h-full"
+                  allowFullScreen
+                />
+              </div>
+            ) : (
+              <div className={`aspect-[16/10] bg-gray-900 ${imgLoaded ? "" : "animate-pulse"}`}>
+                <img
+                  src={apod.url}
+                  alt={apod.title}
+                  onLoad={() => setImgLoaded(true)}
+                  className={`w-full h-full object-cover transition-all duration-700 ${
+                    imgLoaded ? "opacity-100 scale-100" : "opacity-0 scale-105"
+                  } group-hover:scale-105`}
+                />
+              </div>
+            )}
+            {/* 이미지 오버레이 그라데이션 */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent pointer-events-none" />
+            {/* 이미지 위 제목 */}
+            <div className="absolute bottom-0 left-0 right-0 p-6 md:p-10">
+              <DateBadge date={apod.date} />
+              <h2 className="serif text-3xl md:text-5xl font-black text-white mt-3 leading-tight drop-shadow-lg">
+                {displayTitle}
+              </h2>
+              {lang === "ko" && koTitle && (
+                <p className="text-white/60 text-sm md:text-base mt-2 italic">{apod.title}</p>
+              )}
+            </div>
+            {/* HD 버튼 */}
+            {apod.hdurl && !isVideo && (
+              <a
+                href={apod.hdurl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="absolute top-4 right-4 bg-black/50 backdrop-blur-sm text-white text-xs px-3 py-1.5 rounded-full border border-white/20 hover:bg-white/20 transition-all"
+              >
+                HD 원본 보기
+              </a>
+            )}
+          </div>
+
+          {/* 본문 영역 */}
+          <div className="max-w-3xl mx-auto px-4">
+            {/* 언어 토글 */}
+            <div className="slide-up-delay-1 flex justify-end mb-6">
+              <div className="inline-flex bg-gray-800/50 rounded-full p-1 border border-gray-700/50">
+                <button
+                  onClick={() => setLang("ko")}
+                  disabled={translating && lang !== "ko"}
+                  className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+                    lang === "ko"
+                      ? "bg-blue-500 text-white shadow"
+                      : "text-gray-400 hover:text-white"
+                  }`}
+                >
+                  한글
+                  {translating && lang === "ko" && (
+                    <span className="ml-1 text-xs opacity-70">(번역중...)</span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setLang("en")}
+                  className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+                    lang === "en"
+                      ? "bg-blue-500 text-white shadow"
+                      : "text-gray-400 hover:text-white"
+                  }`}
+                >
+                  English
+                </button>
+              </div>
+            </div>
+
+            {/* 설명 */}
+            <div className="slide-up-delay-1">
+              {translating && lang === "ko" ? (
+                <div className="space-y-3 animate-pulse">
+                  <div className="h-5 bg-gray-800 rounded w-full" />
+                  <div className="h-5 bg-gray-800 rounded w-full" />
+                  <div className="h-5 bg-gray-800 rounded w-11/12" />
+                  <div className="h-5 bg-gray-800 rounded w-full" />
+                  <div className="h-5 bg-gray-800 rounded w-9/12" />
+                </div>
+              ) : (
+                <div className="magazine-drop-cap serif text-gray-200 text-lg md:text-xl leading-relaxed md:leading-loose tracking-wide fade-in">
+                  {displayExplanation}
+                </div>
+              )}
+            </div>
+
+            {/* 원문 보기 (한글 모드일 때) */}
+            {lang === "ko" && !translating && koExplanation && (
+              <>
+                <Divider />
+                <ExpandableSection title="Original Description (English)">
+                  <p className="text-gray-400 text-sm md:text-base leading-relaxed italic">
+                    {apod.explanation}
+                  </p>
+                </ExpandableSection>
+              </>
+            )}
+
+            {/* 크레딧 */}
+            {apod.copyright && (
+              <div className="slide-up-delay-3 mt-8 text-center">
+                <p className="text-gray-500 text-xs uppercase tracking-widest">Image Credit</p>
+                <p className="text-gray-300 text-sm mt-1 font-medium">{apod.copyright}</p>
+              </div>
+            )}
+          </div>
+        </article>
+      );
+    }
+
+    // ========================================
+    // 🔽 접기/펼치기 컴포넌트
+    // ========================================
+    function ExpandableSection({ title, children }) {
+      const [open, setOpen] = useState(false);
+
+      return (
+        <div className="slide-up-delay-2">
+          <button
+            onClick={() => setOpen(!open)}
+            className="flex items-center gap-2 text-gray-400 hover:text-blue-300 transition-colors text-sm group"
+          >
+            <span className={`transition-transform duration-300 ${open ? "rotate-90" : ""}`}>▶</span>
+            <span className="group-hover:underline">{title}</span>
+          </button>
+          {open && (
+            <div className="mt-4 pl-5 border-l-2 border-blue-500/20 fade-in">
+              {children}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ========================================
+    // 📅 이전 사진 미니 카드
+    // ========================================
+    function PastApodCard({ apod, onClick }) {
+      const isVideo = apod.media_type === "video";
+      // 비디오면 썸네일 추출 시도
+      const thumbUrl = isVideo
+        ? (apod.thumbnail_url || `https://img.youtube.com/vi/${apod.url.match(/embed\/([^?]+)/)?.[1]}/hqdefault.jpg`)
+        : apod.url;
+
+      return (
+        <button
+          onClick={onClick}
+          className="group text-left rounded-xl overflow-hidden bg-gray-800/50 border border-gray-700/50 hover:border-blue-500/50 transition-all hover:shadow-lg hover:shadow-blue-900/20"
+        >
+          <div className="aspect-[16/10] overflow-hidden bg-gray-900 relative">
+            <img
+              src={thumbUrl}
+              alt={apod.title}
+              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+            />
+            {isVideo && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-12 h-12 bg-black/60 rounded-full flex items-center justify-center">
+                  <span className="text-white text-xl ml-1">▶</span>
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="p-3">
+            <p className="text-gray-500 text-xs">{apod.date}</p>
+            <p className="text-gray-200 font-bold text-sm mt-1 serif line-clamp-1">{apod.title}</p>
+          </div>
+        </button>
+      );
+    }
+
+    // ========================================
+    // 📅 날짜 선택 컴포넌트
+    // ========================================
+    function DatePicker({ currentDate, onChange }) {
+      return (
+        <div className="flex items-center justify-center gap-3 mb-8">
+          <button
+            onClick={() => {
+              const d = new Date(currentDate + "T00:00:00");
+              d.setDate(d.getDate() - 1);
+              const prev = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+              onChange(prev);
+            }}
+            className="p-2 text-gray-400 hover:text-blue-300 transition-colors"
+            aria-label="이전 날짜"
+          >
+            ◀
+          </button>
+          <input
+            type="date"
+            value={currentDate}
+            max={todayStr()}
+            min="1995-06-16"
+            onChange={(e) => onChange(e.target.value)}
+            className="bg-gray-800/50 border border-gray-700/50 text-gray-300 text-sm rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500/50"
+          />
+          <button
+            onClick={() => {
+              const d = new Date(currentDate + "T00:00:00");
+              d.setDate(d.getDate() + 1);
+              const next = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+              if (next <= todayStr()) onChange(next);
+            }}
+            disabled={currentDate >= todayStr()}
+            className="p-2 text-gray-400 hover:text-blue-300 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            aria-label="다음 날짜"
+          >
+            ▶
+          </button>
+        </div>
+      );
+    }
+
+    // ========================================
+    // 🚀 App Component
+    // ========================================
+    function App() {
+      const [apodList, setApodList] = useState([]);
+      const [currentApod, setCurrentApod] = useState(null);
+      const [loading, setLoading] = useState(true);
+      const [error, setError] = useState(null);
+
+      // 초기 로드: 최근 7일간 APOD
+      const loadInitial = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        try {
+          const data = await fetchRecentApods(7);
+          setApodList(data);
+          setCurrentApod(data[0]); // 가장 최신
+        } catch (e) {
+          setError(e.message);
+        } finally {
+          setLoading(false);
+        }
+      }, []);
+
+      useEffect(() => { loadInitial(); }, [loadInitial]);
+
+      // 날짜 선택으로 특정 날짜 APOD 보기
+      const handleDateChange = useCallback(async (date) => {
+        // 이미 로드된 데이터에서 찾기
+        const existing = apodList.find((a) => a.date === date);
+        if (existing) {
+          setCurrentApod(existing);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+          return;
+        }
+
+        setLoading(true);
+        setError(null);
+        try {
+          const data = await fetchApod(date);
+          setCurrentApod(data);
+          // 리스트에 추가 (중복 방지)
+          setApodList((prev) => {
+            const filtered = prev.filter((a) => a.date !== data.date);
+            return [data, ...filtered].sort((a, b) => b.date.localeCompare(a.date));
+          });
+        } catch (e) {
+          setError(e.message);
+        } finally {
+          setLoading(false);
+        }
+      }, [apodList]);
+
+      const otherApods = apodList.filter((a) => a.date !== currentApod?.date).slice(0, 6);
+
+      return (
+        <div className="min-h-screen bg-gray-950 text-white relative">
+          <StarField />
+
+          {/* 헤더 */}
+          <header className="relative z-10 pt-10 pb-6 text-center">
+            <p className="text-blue-400/60 text-xs uppercase tracking-[0.4em] mb-2">
+              National Aeronautics and Space Administration
+            </p>
+            <h1 className="serif text-4xl md:text-5xl font-black bg-gradient-to-r from-blue-300 via-white to-blue-300 bg-clip-text text-transparent">
+              오늘의 우주 사진
+            </h1>
+            <p className="text-gray-500 text-sm mt-2">
+              Astronomy Picture of the Day
+            </p>
+            <div className="w-16 h-0.5 bg-gradient-to-r from-transparent via-blue-400 to-transparent mx-auto mt-4" />
+          </header>
+
+          {/* 메인 콘텐츠 */}
+          <main className="relative z-10 max-w-4xl mx-auto px-4 pb-12">
+            {/* 날짜 선택 */}
+            {currentApod && !loading && (
+              <DatePicker currentDate={currentApod.date} onChange={handleDateChange} />
+            )}
+
+            {/* 로딩 */}
+            {loading && <Spinner message="우주 사진을 불러오는 중..." />}
+
+            {/* 에러 */}
+            {error && !loading && <ErrorMessage message={error} onRetry={loadInitial} />}
+
+            {/* 메인 APOD */}
+            {currentApod && !loading && !error && (
+              <ApodMagazine key={currentApod.date} apod={currentApod} />
+            )}
+
+            {/* 이전 사진 */}
+            {otherApods.length > 0 && !loading && !error && (
+              <div className="mt-16">
+                <Divider />
+                <h3 className="serif text-center text-xl text-gray-300 mb-6">최근 사진들</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {otherApods.map((apod) => (
+                    <PastApodCard
+                      key={apod.date}
+                      apod={apod}
+                      onClick={() => {
+                        setCurrentApod(apod);
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </main>
+
+          {/* 푸터 */}
+          <footer className="relative z-10 text-center py-8 border-t border-gray-800/50">
+            <p className="text-gray-600 text-xs">
+              Powered by <a href="https://api.nasa.gov" target="_blank" rel="noopener" className="underline hover:text-gray-400">NASA APOD API</a> &copy; 2026
+            </p>
+          </footer>
+        </div>
+      );
+    }
+
+    // ========================================
+    // 🎬 Rendering
+    // ========================================
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
