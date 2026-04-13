@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>밸런스 게임</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800;900&display=swap');
+    body { font-family: 'Noto Sans KR', sans-serif; }
+
+    @keyframes slideInUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulseVS {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.15); }
+    }
+    @keyframes fadeInScale {
+      from { opacity: 0; transform: scale(0.9); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    @keyframes shimmer {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+    @keyframes fireBadge {
+      0%, 100% { transform: scale(1) rotate(-3deg); }
+      50% { transform: scale(1.1) rotate(3deg); }
+    }
+    .animate-slide-in { animation: slideInUp 0.5s ease-out forwards; }
+    .animate-pulse-vs { animation: pulseVS 2s ease-in-out infinite; }
+    .animate-fade-scale { animation: fadeInScale 0.4s ease-out forwards; }
+    .animate-fire { animation: fireBadge 1s ease-in-out infinite; }
+    .shimmer-bar {
+      background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.3) 50%, transparent 100%);
+      background-size: 200% 100%;
+      animation: shimmer 2s infinite;
+    }
+    .option-card-a:hover { transform: translateY(-4px) scale(1.02); box-shadow: 0 12px 40px rgba(79, 70, 229, 0.35); }
+    .option-card-b:hover { transform: translateY(-4px) scale(1.02); box-shadow: 0 12px 40px rgba(225, 29, 72, 0.35); }
+    .option-card-a, .option-card-b { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+    .voted-card { pointer-events: none; }
+  </style>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Noto Sans KR', 'sans-serif'] }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-gray-950 text-white min-h-screen">
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useCallback, useMemo, useRef } = React;
+
+    // ========================================
+    // API Helper
+    // ========================================
+    const API_BASE = '/api';
+
+    function normalize(q) {
+      return {
+        ...q,
+        votes_a: Number(q.votes_a) || 0,
+        votes_b: Number(q.votes_b) || 0,
+      };
+    }
+
+    async function api(path, options = {}) {
+      const res = await fetch(`${API_BASE}${path}`, {
+        headers: { 'Content-Type': 'application/json' },
+        ...options,
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.message || 'API error');
+      if (Array.isArray(json.data)) return json.data.map(normalize);
+      if (json.data && json.data.id) return normalize(json.data);
+      return json.data;
+    }
+
+    function loadVoted() {
+      const stored = localStorage.getItem('balance-game-voted');
+      if (stored) return JSON.parse(stored);
+      return {};
+    }
+
+    // ========================================
+    // Design System Components
+    // ========================================
+    function Button({ children, onClick, variant = 'primary', size = 'md', disabled = false, className = '' }) {
+      const base = 'font-bold rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-950 inline-flex items-center justify-center';
+      const variants = {
+        primary: 'bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white focus:ring-indigo-400 shadow-lg shadow-indigo-500/25',
+        secondary: 'bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 focus:ring-gray-500',
+        danger: 'bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white focus:ring-red-400',
+      };
+      const sizes = {
+        sm: 'px-3 py-1.5 text-sm',
+        md: 'px-5 py-2.5 text-base',
+        lg: 'px-7 py-3.5 text-lg',
+      };
+      return (
+        <button
+          onClick={onClick}
+          disabled={disabled}
+          className={`${base} ${variants[variant]} ${sizes[size]} ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} ${className}`}
+        >
+          {children}
+        </button>
+      );
+    }
+
+    function Input({ label, value, onChange, placeholder, className = '', maxLength }) {
+      return (
+        <div className={className}>
+          {label && <label className="block text-sm font-semibold text-gray-300 mb-1.5">{label}</label>}
+          <input
+            type="text"
+            value={value}
+            onChange={onChange}
+            placeholder={placeholder}
+            maxLength={maxLength}
+            className="w-full px-4 py-3 bg-gray-800/80 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+          />
+        </div>
+      );
+    }
+
+    function Card({ children, className = '' }) {
+      return (
+        <div className={`bg-gray-900/80 backdrop-blur-sm border border-gray-800 rounded-2xl p-6 ${className}`}>
+          {children}
+        </div>
+      );
+    }
+
+    function Modal({ isOpen, onClose, title, children }) {
+      if (!isOpen) return null;
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+          <div
+            className="relative bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-lg animate-fade-scale shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-xl font-bold">{title}</h3>
+              <button onClick={onClose} className="text-gray-400 hover:text-white text-2xl leading-none p-1">&times;</button>
+            </div>
+            {children}
+          </div>
+        </div>
+      );
+    }
+
+    function Badge({ children, color = 'indigo', className = '' }) {
+      const colors = {
+        indigo: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
+        rose: 'bg-rose-500/20 text-rose-300 border-rose-500/30',
+        amber: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+        green: 'bg-green-500/20 text-green-300 border-green-500/30',
+      };
+      return (
+        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border ${colors[color]} ${className}`}>
+          {children}
+        </span>
+      );
+    }
+
+    // ========================================
+    // VS Divider Component
+    // ========================================
+    function VSDivider() {
+      return (
+        <div className="flex items-center justify-center my-1 sm:my-0 sm:mx-2 relative z-10">
+          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-yellow-400 via-amber-500 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/30 animate-pulse-vs">
+            <span className="text-xl sm:text-2xl font-black text-gray-900 tracking-tighter">VS</span>
+          </div>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Percentage Bar Component
+    // ========================================
+    function PercentageBar({ percentA, percentB, voted }) {
+      const [animated, setAnimated] = useState(false);
+      useEffect(() => {
+        if (voted) {
+          const timer = setTimeout(() => setAnimated(true), 50);
+          return () => clearTimeout(timer);
+        }
+      }, [voted]);
+
+      if (!voted) return null;
+
+      const widthA = animated ? percentA : 0;
+      const widthB = animated ? percentB : 0;
+
+      return (
+        <div className="mt-4 animate-fade-scale">
+          <div className="flex rounded-full overflow-hidden h-8 bg-gray-800 border border-gray-700">
+            <div
+              className="bg-gradient-to-r from-indigo-600 to-indigo-500 flex items-center justify-center transition-all duration-1000 ease-out relative overflow-hidden"
+              style={{ width: `${widthA}%`, minWidth: percentA > 0 ? '40px' : '0' }}
+            >
+              <div className="shimmer-bar absolute inset-0" />
+              <span className="text-xs font-bold relative z-10 drop-shadow">{Math.round(percentA)}%</span>
+            </div>
+            <div
+              className="bg-gradient-to-r from-rose-500 to-rose-600 flex items-center justify-center transition-all duration-1000 ease-out relative overflow-hidden"
+              style={{ width: `${widthB}%`, minWidth: percentB > 0 ? '40px' : '0' }}
+            >
+              <div className="shimmer-bar absolute inset-0" />
+              <span className="text-xs font-bold relative z-10 drop-shadow">{Math.round(percentB)}%</span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Question Card Component
+    // ========================================
+    function QuestionCard({ question, votedOption, onVote, index }) {
+      const totalVotes = question.votes_a + question.votes_b;
+      const percentA = totalVotes > 0 ? (question.votes_a / totalVotes) * 100 : 50;
+      const percentB = totalVotes > 0 ? (question.votes_b / totalVotes) * 100 : 50;
+      const isHot = totalVotes >= 20;
+      const hasVoted = !!votedOption;
+
+      return (
+        <div className="animate-slide-in" style={{ animationDelay: `${index * 0.08}s`, opacity: 0 }}>
+          <Card className="relative overflow-hidden group hover:border-gray-700 transition-all">
+            {/* Decorative gradient border top */}
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 via-amber-400 to-rose-500" />
+
+            {/* Header */}
+            <div className="flex items-start justify-between mb-5">
+              <h3 className="text-lg sm:text-xl font-bold text-white leading-snug pr-3">{question.title}</h3>
+              <div className="flex items-center gap-2 shrink-0">
+                {isHot && (
+                  <span className="animate-fire inline-block">
+                    <Badge color="amber">HOT</Badge>
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Options */}
+            <div className="flex flex-col sm:flex-row items-stretch gap-2 sm:gap-0">
+              {/* Option A */}
+              <button
+                onClick={() => !hasVoted && onVote(question.id, 'A')}
+                disabled={hasVoted}
+                className={`flex-1 rounded-xl sm:rounded-2xl p-4 sm:p-5 text-center transition-all duration-300 border-2 relative overflow-hidden
+                  ${hasVoted && votedOption === 'A'
+                    ? 'border-indigo-400 bg-indigo-500/20 ring-2 ring-indigo-400/50'
+                    : hasVoted
+                      ? 'border-gray-700 bg-gray-800/50 opacity-70'
+                      : 'border-indigo-500/40 bg-gradient-to-br from-indigo-900/60 to-indigo-800/30 hover:border-indigo-400 option-card-a cursor-pointer'
+                  } ${hasVoted ? 'voted-card' : ''}`}
+              >
+                <div className="text-xs font-bold text-indigo-400 mb-2 tracking-wider">OPTION A</div>
+                <div className="text-base sm:text-lg font-bold text-white leading-snug">{question.option_a}</div>
+                {hasVoted && (
+                  <div className="mt-3 animate-fade-scale">
+                    <div className="text-2xl sm:text-3xl font-black text-indigo-300">{Math.round(percentA)}%</div>
+                    <div className="text-xs text-gray-400 mt-1">{question.votes_a}표</div>
+                  </div>
+                )}
+                {hasVoted && votedOption === 'A' && (
+                  <div className="absolute top-2 right-2">
+                    <span className="bg-indigo-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">MY</span>
+                  </div>
+                )}
+              </button>
+
+              <VSDivider />
+
+              {/* Option B */}
+              <button
+                onClick={() => !hasVoted && onVote(question.id, 'B')}
+                disabled={hasVoted}
+                className={`flex-1 rounded-xl sm:rounded-2xl p-4 sm:p-5 text-center transition-all duration-300 border-2 relative overflow-hidden
+                  ${hasVoted && votedOption === 'B'
+                    ? 'border-rose-400 bg-rose-500/20 ring-2 ring-rose-400/50'
+                    : hasVoted
+                      ? 'border-gray-700 bg-gray-800/50 opacity-70'
+                      : 'border-rose-500/40 bg-gradient-to-br from-rose-900/60 to-rose-800/30 hover:border-rose-400 option-card-b cursor-pointer'
+                  } ${hasVoted ? 'voted-card' : ''}`}
+              >
+                <div className="text-xs font-bold text-rose-400 mb-2 tracking-wider">OPTION B</div>
+                <div className="text-base sm:text-lg font-bold text-white leading-snug">{question.option_b}</div>
+                {hasVoted && (
+                  <div className="mt-3 animate-fade-scale">
+                    <div className="text-2xl sm:text-3xl font-black text-rose-300">{Math.round(percentB)}%</div>
+                    <div className="text-xs text-gray-400 mt-1">{question.votes_b}표</div>
+                  </div>
+                )}
+                {hasVoted && votedOption === 'B' && (
+                  <div className="absolute top-2 right-2">
+                    <span className="bg-rose-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">MY</span>
+                  </div>
+                )}
+              </button>
+            </div>
+
+            {/* Percentage Bar */}
+            <PercentageBar percentA={percentA} percentB={percentB} voted={hasVoted} />
+
+            {/* Footer */}
+            {hasVoted && (
+              <div className="mt-3 text-center animate-fade-scale">
+                <span className="text-sm text-gray-400">
+                  총 참여자 수: <span className="font-bold text-white">{totalVotes}</span>명
+                </span>
+              </div>
+            )}
+            {!hasVoted && (
+              <div className="mt-4 text-center">
+                <span className="text-sm text-gray-500">카드를 클릭하여 투표하세요!</span>
+              </div>
+            )}
+          </Card>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Create Question Form
+    // ========================================
+    function CreateQuestionForm({ onSubmit, onClose }) {
+      const [title, setTitle] = useState('');
+      const [optionA, setOptionA] = useState('');
+      const [optionB, setOptionB] = useState('');
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        if (!title.trim() || !optionA.trim() || !optionB.trim()) return;
+        onSubmit({ title: title.trim(), optionA: optionA.trim(), optionB: optionB.trim() });
+        setTitle('');
+        setOptionA('');
+        setOptionB('');
+        onClose();
+      };
+
+      const isValid = title.trim() && optionA.trim() && optionB.trim();
+
+      return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Input
+            label="질문 제목"
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            placeholder="예: 어떤 삶을 선택하시겠습니까?"
+            maxLength={100}
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-indigo-300 mb-1.5">선택지 A (파란팀)</label>
+              <input
+                type="text"
+                value={optionA}
+                onChange={e => setOptionA(e.target.value)}
+                placeholder="예: 월급 500만원 + 주7일 출근"
+                maxLength={60}
+                className="w-full px-4 py-3 bg-indigo-900/30 border border-indigo-500/40 rounded-xl text-white placeholder-indigo-400/50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-rose-300 mb-1.5">선택지 B (빨간팀)</label>
+              <input
+                type="text"
+                value={optionB}
+                onChange={e => setOptionB(e.target.value)}
+                placeholder="예: 월급 300만원 + 주4일 출근"
+                maxLength={60}
+                className="w-full px-4 py-3 bg-rose-900/30 border border-rose-500/40 rounded-xl text-white placeholder-rose-400/50 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
+              />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="secondary" onClick={onClose} className="flex-1">취소</Button>
+            <Button variant="primary" className="flex-1" disabled={!isValid}>등록하기</Button>
+          </div>
+        </form>
+      );
+    }
+
+    // ========================================
+    // Header Component
+    // ========================================
+    function Header({ questionCount, onOpenCreate }) {
+      return (
+        <header className="relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/40 via-gray-950 to-rose-900/40" />
+          <div className="relative max-w-4xl mx-auto px-4 py-8 sm:py-12 text-center">
+            <h1 className="text-4xl sm:text-5xl font-black tracking-tight">
+              <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-rose-400 bg-clip-text text-transparent">
+                밸런스 게임
+              </span>
+            </h1>
+            <p className="mt-2 text-gray-400 text-base sm:text-lg">당신의 선택은? 지금 바로 투표하세요!</p>
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+              <Badge color="green">{questionCount}개 질문</Badge>
+              <Button onClick={onOpenCreate} size="md">+ 새 질문 만들기</Button>
+            </div>
+          </div>
+        </header>
+      );
+    }
+
+    // ========================================
+    // Sort Controls
+    // ========================================
+    function SortControls({ sortBy, onSortChange }) {
+      return (
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-500 hidden sm:inline">정렬:</span>
+          <button
+            onClick={() => onSortChange('newest')}
+            className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-all ${
+              sortBy === 'newest'
+                ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
+                : 'text-gray-400 hover:text-gray-300 border border-transparent'
+            }`}
+          >
+            최신순
+          </button>
+          <button
+            onClick={() => onSortChange('popular')}
+            className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-all ${
+              sortBy === 'popular'
+                ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                : 'text-gray-400 hover:text-gray-300 border border-transparent'
+            }`}
+          >
+            인기순
+          </button>
+        </div>
+      );
+    }
+
+    // ========================================
+    // App Component
+    // ========================================
+    function App() {
+      const [questions, setQuestions] = useState([]);
+      const [voted, setVoted] = useState(loadVoted);
+      const [showCreate, setShowCreate] = useState(false);
+      const [sortBy, setSortBy] = useState('newest');
+      const [loading, setLoading] = useState(true);
+
+      useEffect(() => {
+        api('/questions').then(data => {
+          setQuestions(data);
+          setLoading(false);
+        }).catch(err => {
+          console.error('Failed to load questions:', err);
+          setLoading(false);
+        });
+      }, []);
+
+      useEffect(() => {
+        localStorage.setItem('balance-game-voted', JSON.stringify(voted));
+      }, [voted]);
+
+      const handleVote = useCallback(async (questionId, option) => {
+        if (voted[questionId]) return;
+
+        setQuestions(prev => prev.map(q => {
+          if (q.id !== questionId) return q;
+          return {
+            ...q,
+            votes_a: option === 'A' ? q.votes_a + 1 : q.votes_a,
+            votes_b: option === 'B' ? q.votes_b + 1 : q.votes_b,
+          };
+        }));
+        setVoted(prev => ({ ...prev, [questionId]: option }));
+
+        try {
+          const updated = await api(`/questions/${questionId}/vote`, {
+            method: 'PATCH',
+            body: JSON.stringify({ option }),
+          });
+          setQuestions(prev => prev.map(q => q.id === questionId ? updated : q));
+        } catch (err) {
+          console.error('Failed to vote:', err);
+        }
+      }, [voted]);
+
+      const handleCreate = useCallback(async (data) => {
+        try {
+          const newQ = await api('/questions', {
+            method: 'POST',
+            body: JSON.stringify({ title: data.title, option_a: data.optionA, option_b: data.optionB }),
+          });
+          setQuestions(prev => [newQ, ...prev]);
+        } catch (err) {
+          console.error('Failed to create question:', err);
+        }
+      }, []);
+
+      const sortedQuestions = useMemo(() => {
+        const sorted = [...questions];
+        if (sortBy === 'newest') {
+          sorted.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        } else {
+          sorted.sort((a, b) => (b.votes_a + b.votes_b) - (a.votes_a + a.votes_b));
+        }
+        return sorted;
+      }, [questions, sortBy]);
+
+      return (
+        <div className="min-h-screen bg-gray-950">
+          <Header questionCount={questions.length} onOpenCreate={() => setShowCreate(true)} />
+
+          <main className="max-w-4xl mx-auto px-4 pb-12">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-bold text-gray-300">전체 질문</h2>
+              <SortControls sortBy={sortBy} onSortChange={setSortBy} />
+            </div>
+
+            <div className="space-y-6">
+              {sortedQuestions.map((q, i) => (
+                <QuestionCard
+                  key={q.id}
+                  question={q}
+                  votedOption={voted[q.id]}
+                  onVote={handleVote}
+                  index={i}
+                />
+              ))}
+            </div>
+
+            {loading && (
+              <div className="text-center py-20">
+                <p className="text-4xl mb-3 animate-pulse">⚖️</p>
+                <p className="text-gray-400 text-lg">질문을 불러오는 중...</p>
+              </div>
+            )}
+
+            {!loading && questions.length === 0 && (
+              <div className="text-center py-20">
+                <p className="text-4xl mb-3">&#9878;&#65039;</p>
+                <p className="text-gray-400 text-lg">아직 등록된 질문이 없습니다.</p>
+                <p className="text-gray-500 mt-1">첫 번째 밸런스 게임 질문을 만들어보세요!</p>
+              </div>
+            )}
+          </main>
+
+          <Modal isOpen={showCreate} onClose={() => setShowCreate(false)} title="새 밸런스 게임 질문">
+            <CreateQuestionForm onSubmit={handleCreate} onClose={() => setShowCreate(false)} />
+          </Modal>
+
+          <footer className="border-t border-gray-800 py-6 text-center text-sm text-gray-600">
+            밸런스 게임 &copy; 2026
+          </footer>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Rendering
+    // ========================================
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
