@@ -1,0 +1,16 @@
+{
+  "ingredients": [
+    { "name": "계란", "quantity": "6개", "category": "냉장" },
+    { "name": "김치", "quantity": "1통", "category": "냉장" },
+    { "name": "파", "quantity": "2대", "category": "냉장" },
+    { "name": "우유", "quantity": "1팩", "category": "냉장" },
+    { "name": "슬라이스 치즈", "quantity": "5장", "category": "냉장" },
+    { "name": "두부", "quantity": "1모", "category": "냉장" },
+    { "name": "냉동밥", "quantity": "3개", "category": "냉동" },
+    { "name": "냉동만두", "quantity": "1봉", "category": "냉동" },
+    { "name": "냉동 닭가슴살", "quantity": "2팩", "category": "냉동" },
+    { "name": "라면", "quantity": "3봉", "category": "상온" },
+    { "name": "참치캔", "quantity": "2개", "category": "상온" },
+    { "name": "즉석카레", "quantity": "1개", "category": "상온" }
+  ]
+}

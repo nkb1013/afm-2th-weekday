@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>냉장고 관리 - 재료 & 레시피</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            warm: {
+              50: '#fef7f0',
+              100: '#fdecd8',
+              200: '#fad5b0',
+              300: '#f6b87e',
+              400: '#f1934a',
+              500: '#ed7826',
+              600: '#de5e1c',
+              700: '#b84719',
+              800: '#933a1c',
+              900: '#77311a',
+            },
+            olive: {
+              50: '#f8f8f0',
+              100: '#eeeed6',
+              200: '#ddddb0',
+              300: '#c6c682',
+              400: '#b0b05c',
+              500: '#969643',
+              600: '#767633',
+              700: '#5b5b2a',
+              800: '#4a4a26',
+              900: '#404024',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap');
+    body { font-family: 'Noto Sans KR', sans-serif; }
+    .tag-enter { animation: tagPop 0.25s ease-out; }
+    @keyframes tagPop {
+      0% { transform: scale(0.5); opacity: 0; }
+      70% { transform: scale(1.08); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .page-enter { animation: fadeSlideIn 0.3s ease-out; }
+    @keyframes fadeSlideIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body class="bg-warm-50 min-h-screen">
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useContext, createContext, useCallback, useRef, useMemo } = React;
+
+    // ========================================
+    // Design System Components
+    // ========================================
+
+    function Button({ children, variant = 'primary', size = 'md', disabled = false, onClick, className = '', type = 'button' }) {
+      const base = 'inline-flex items-center justify-center font-medium rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95';
+      const variants = {
+        primary: 'bg-warm-500 hover:bg-warm-600 text-white focus:ring-warm-400 shadow-md hover:shadow-lg',
+        secondary: 'bg-olive-100 hover:bg-olive-200 text-olive-800 focus:ring-olive-400',
+        danger: 'bg-red-500 hover:bg-red-600 text-white focus:ring-red-400',
+        ghost: 'bg-transparent hover:bg-warm-100 text-warm-700 focus:ring-warm-300',
+      };
+      const sizes = {
+        sm: 'px-3 py-1.5 text-sm',
+        md: 'px-5 py-2.5 text-sm',
+        lg: 'px-6 py-3 text-base',
+      };
+      return (
+        <button type={type} disabled={disabled} onClick={onClick}
+          className={`${base} ${variants[variant]} ${sizes[size]} ${className}`}>
+          {children}
+        </button>
+      );
+    }
+
+    function Input({ label, value, onChange, placeholder, error, disabled, className = '', onKeyDown, type = 'text' }) {
+      return (
+        <div className={className}>
+          {label && <label className="block text-sm font-medium text-warm-800 mb-1.5">{label}</label>}
+          <input type={type} value={value} onChange={onChange} placeholder={placeholder}
+            disabled={disabled} onKeyDown={onKeyDown}
+            className={`w-full px-4 py-2.5 rounded-xl border-2 transition-all duration-200 bg-white
+              ${error ? 'border-red-400 focus:border-red-500 focus:ring-red-200' : 'border-warm-200 focus:border-warm-400 focus:ring-warm-100'}
+              focus:outline-none focus:ring-4 placeholder:text-warm-300 text-warm-900`} />
+          {error && <p className="mt-1 text-sm text-red-500">{error}</p>}
+        </div>
+      );
+    }
+
+    function Textarea({ label, value, onChange, placeholder, rows = 5, className = '' }) {
+      return (
+        <div className={className}>
+          {label && <label className="block text-sm font-medium text-warm-800 mb-1.5">{label}</label>}
+          <textarea value={value} onChange={onChange} placeholder={placeholder} rows={rows}
+            className="w-full px-4 py-3 rounded-xl border-2 border-warm-200 focus:border-warm-400
+              focus:outline-none focus:ring-4 focus:ring-warm-100 placeholder:text-warm-300
+              text-warm-900 bg-white transition-all duration-200 resize-vertical" />
+        </div>
+      );
+    }
+
+    function Card({ children, className = '' }) {
+      return (
+        <div className={`bg-white rounded-2xl shadow-md border border-warm-100 p-6 ${className}`}>
+          {children}
+        </div>
+      );
+    }
+
+    function Modal({ isOpen, onClose, title, children }) {
+      if (!isOpen) return null;
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+          <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 page-enter"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-warm-900">{title}</h3>
+              <button onClick={onClose} className="text-warm-400 hover:text-warm-600 transition-colors p-1">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            {children}
+          </div>
+        </div>
+      );
+    }
+
+    const TAG_COLORS = [
+      'bg-orange-100 text-orange-800 border-orange-200',
+      'bg-amber-100 text-amber-800 border-amber-200',
+      'bg-yellow-100 text-yellow-800 border-yellow-200',
+      'bg-lime-100 text-lime-800 border-lime-200',
+      'bg-green-100 text-green-800 border-green-200',
+      'bg-teal-100 text-teal-800 border-teal-200',
+      'bg-cyan-100 text-cyan-800 border-cyan-200',
+      'bg-rose-100 text-rose-800 border-rose-200',
+      'bg-pink-100 text-pink-800 border-pink-200',
+      'bg-red-100 text-red-800 border-red-200',
+      'bg-emerald-100 text-emerald-800 border-emerald-200',
+      'bg-violet-100 text-violet-800 border-violet-200',
+    ];
+
+    function getTagColor(name) {
+      let hash = 0;
+      for (let i = 0; i < name.length; i++) {
+        hash = name.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      return TAG_COLORS[Math.abs(hash) % TAG_COLORS.length];
+    }
+
+    function Tag({ name, onRemove, className = '' }) {
+      const color = getTagColor(name);
+      return (
+        <span className={`tag-enter inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium border ${color} ${className}`}>
+          {name}
+          {onRemove && (
+            <button onClick={() => onRemove(name)} aria-label={`${name} 삭제`}
+              className="ml-0.5 rounded-full hover:bg-black/10 transition-colors p-0.5 -mr-1">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </span>
+      );
+    }
+
+    function TagInput({ tags, onAdd, onRemove, placeholder = '재료를 입력하세요' }) {
+      const [input, setInput] = useState('');
+      const inputRef = useRef(null);
+
+      const handleAdd = () => {
+        const trimmed = input.trim();
+        if (trimmed && !tags.includes(trimmed)) {
+          onAdd(trimmed);
+          setInput('');
+        } else if (tags.includes(trimmed)) {
+          setInput('');
+        }
+      };
+
+      const handleKeyDown = (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          handleAdd();
+        }
+      };
+
+      return (
+        <div>
+          <div className="flex gap-2 mb-3">
+            <input ref={inputRef} type="text" value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={placeholder}
+              className="flex-1 px-4 py-2.5 rounded-xl border-2 border-warm-200 focus:border-warm-400
+                focus:outline-none focus:ring-4 focus:ring-warm-100 placeholder:text-warm-300
+                text-warm-900 bg-white transition-all duration-200" />
+            <Button onClick={handleAdd} disabled={!input.trim()}>추가</Button>
+          </div>
+          {tags.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {tags.map(tag => (
+                <Tag key={tag} name={tag} onRemove={onRemove} />
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    const CATEGORY_STYLES = {
+      '냉장': { bg: 'bg-cyan-50', border: 'border-cyan-200', label: 'text-cyan-700', icon: '\u2744\uFE0F' },
+      '냉동': { bg: 'bg-blue-50', border: 'border-blue-200', label: 'text-blue-700', icon: '\uD83E\uDDCA' },
+      '상온': { bg: 'bg-amber-50', border: 'border-amber-200', label: 'text-amber-700', icon: '\uD83C\uDF3E' },
+      '기타': { bg: 'bg-gray-50', border: 'border-gray-200', label: 'text-gray-700', icon: '\uD83D\uDCE6' },
+    };
+
+    function IngredientChip({ ingredient, onRemove }) {
+      const color = getTagColor(ingredient.name);
+      return (
+        <span className={`tag-enter inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border ${color}`}>
+          <span className="font-semibold">{ingredient.name}</span>
+          {ingredient.quantity && (
+            <span className="text-xs opacity-70">{ingredient.quantity}</span>
+          )}
+          {onRemove && (
+            <button onClick={() => onRemove(ingredient.id)} aria-label={`${ingredient.name} 삭제`}
+              className="ml-0.5 rounded-full hover:bg-black/10 transition-colors p-0.5 -mr-1">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </span>
+      );
+    }
+
+    function EmptyState({ icon, title, description }) {
+      return (
+        <div className="text-center py-12 px-4">
+          <div className="text-5xl mb-4">{icon}</div>
+          <h3 className="text-lg font-semibold text-warm-700 mb-1">{title}</h3>
+          <p className="text-warm-400 text-sm">{description}</p>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Router Components
+    // ========================================
+
+    const RouterContext = createContext({ path: '/', navigate: () => {} });
+
+    function useRouter() {
+      return useContext(RouterContext);
+    }
+
+    function matchRoute(pattern, path) {
+      const patternParts = pattern.split('/').filter(Boolean);
+      const pathParts = path.split('/').filter(Boolean);
+      if (patternParts.length !== pathParts.length) return null;
+      const params = {};
+      for (let i = 0; i < patternParts.length; i++) {
+        if (patternParts[i].startsWith(':')) {
+          params[patternParts[i].slice(1)] = pathParts[i];
+        } else if (patternParts[i] !== pathParts[i]) {
+          return null;
+        }
+      }
+      return params;
+    }
+
+    function Router({ children }) {
+      const [path, setPath] = useState(() => {
+        const hash = window.location.hash.slice(1) || '/';
+        return hash;
+      });
+
+      useEffect(() => {
+        const onHashChange = () => {
+          setPath(window.location.hash.slice(1) || '/');
+        };
+        window.addEventListener('hashchange', onHashChange);
+        return () => window.removeEventListener('hashchange', onHashChange);
+      }, []);
+
+      const navigate = useCallback((to) => {
+        window.location.hash = to;
+      }, []);
+
+      return (
+        <RouterContext.Provider value={{ path, navigate }}>
+          {children}
+        </RouterContext.Provider>
+      );
+    }
+
+    function Routes({ children }) {
+      const { path } = useRouter();
+      let element = null;
+      React.Children.forEach(children, child => {
+        if (element) return;
+        if (child.props.path === path || matchRoute(child.props.path, path)) {
+          element = child.props.element;
+        }
+      });
+      // Default fallback for "/" and "/fridge"
+      if (!element) {
+        React.Children.forEach(children, child => {
+          if (!element && (child.props.path === '/' || child.props.path === '/fridge')) {
+            element = child.props.element;
+          }
+        });
+      }
+      return <div className="page-enter">{element}</div>;
+    }
+
+    function Route() { return null; }
+
+    function Link({ to, children, className = '' }) {
+      const { path } = useRouter();
+      const isActive = to === path || (to === '/fridge' && (path === '/' || path === '/fridge'));
+      return (
+        <a href={`#${to}`}
+          className={`${className} ${isActive ? 'text-warm-600 font-semibold' : 'text-warm-500 hover:text-warm-700'} transition-colors`}>
+          {children}
+        </a>
+      );
+    }
+
+    // ========================================
+    // API Helper & Data Context
+    // ========================================
+
+    const API_BASE_URL = window.location.origin + '/api';
+
+    async function apiRequest(endpoint, options = {}) {
+      const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+        ...options,
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.message || `Request failed: ${res.status}`);
+      }
+      return json.data;
+    }
+
+    const DataContext = createContext();
+
+    function useData() {
+      return useContext(DataContext);
+    }
+
+    function DataProvider({ children }) {
+      const [ingredients, setIngredients] = useState([]);
+      const [recipes, setRecipes] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [error, setError] = useState(null);
+
+      const refresh = useCallback(async () => {
+        try {
+          setLoading(true);
+          setError(null);
+          const [ings, recs] = await Promise.all([
+            apiRequest('/ingredients'),
+            apiRequest('/recipes'),
+          ]);
+          setIngredients(ings);
+          setRecipes(recs);
+        } catch (err) {
+          console.error(err);
+          setError(err.message);
+        } finally {
+          setLoading(false);
+        }
+      }, []);
+
+      useEffect(() => { refresh(); }, [refresh]);
+
+      const addIngredient = useCallback(async ({ name, quantity, category }) => {
+        const data = await apiRequest('/ingredients', {
+          method: 'POST',
+          body: JSON.stringify({ name, quantity, category }),
+        });
+        setIngredients(prev => [...prev, data]);
+      }, []);
+
+      const removeIngredient = useCallback(async (id) => {
+        await apiRequest(`/ingredients/${id}`, { method: 'DELETE' });
+        setIngredients(prev => prev.filter(i => i.id !== id));
+      }, []);
+
+      const addRecipe = useCallback(async (recipe) => {
+        const data = await apiRequest('/recipes', {
+          method: 'POST',
+          body: JSON.stringify(recipe),
+        });
+        setRecipes(prev => [...prev, data]);
+        return data;
+      }, []);
+
+      const deleteRecipe = useCallback(async (id) => {
+        await apiRequest(`/recipes/${id}`, { method: 'DELETE' });
+        setRecipes(prev => prev.filter(r => r.id !== id));
+      }, []);
+
+      const value = useMemo(() => ({
+        ingredients, recipes, loading, error,
+        addIngredient, removeIngredient, addRecipe, deleteRecipe, refresh
+      }), [ingredients, recipes, loading, error, addIngredient, removeIngredient, addRecipe, deleteRecipe, refresh]);
+
+      return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
+    }
+
+    // ========================================
+    // Layout Components
+    // ========================================
+
+    function Header() {
+      return (
+        <header className="bg-white/80 backdrop-blur-md border-b border-warm-100 sticky top-0 z-40">
+          <div className="max-w-3xl mx-auto px-4 py-4">
+            <div className="flex items-center justify-between">
+              <Link to="/fridge" className="flex items-center gap-2 !text-warm-800 hover:!text-warm-600 no-underline">
+                <span className="text-2xl" role="img" aria-label="냉장고">&#x1F9CA;</span>
+                <h1 className="text-xl font-bold tracking-tight">나의 냉장고</h1>
+              </Link>
+              <nav className="flex items-center gap-1">
+                <Link to="/fridge">
+                  <span className="px-3 py-2 rounded-lg text-sm hover:bg-warm-50 inline-block transition-colors">재료 관리</span>
+                </Link>
+                <Link to="/recipes">
+                  <span className="px-3 py-2 rounded-lg text-sm hover:bg-warm-50 inline-block transition-colors">레시피</span>
+                </Link>
+              </nav>
+            </div>
+          </div>
+        </header>
+      );
+    }
+
+    // ========================================
+    // Page: Fridge Ingredients
+    // ========================================
+
+    function FridgePage() {
+      const { ingredients, loading, error, addIngredient, removeIngredient } = useData();
+      const [name, setName] = useState('');
+      const [quantity, setQuantity] = useState('');
+      const [category, setCategory] = useState('냉장');
+      const [submitting, setSubmitting] = useState(false);
+      const [formError, setFormError] = useState(null);
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!name.trim()) return;
+        try {
+          setSubmitting(true);
+          setFormError(null);
+          await addIngredient({
+            name: name.trim(),
+            quantity: quantity.trim() || null,
+            category,
+          });
+          setName('');
+          setQuantity('');
+        } catch (err) {
+          setFormError(err.message);
+        } finally {
+          setSubmitting(false);
+        }
+      };
+
+      const grouped = useMemo(() => {
+        const groups = {};
+        for (const ing of ingredients) {
+          const cat = ing.category || '기타';
+          if (!groups[cat]) groups[cat] = [];
+          groups[cat].push(ing);
+        }
+        return groups;
+      }, [ingredients]);
+
+      const categoryOrder = ['냉장', '냉동', '상온', '기타'];
+
+      return (
+        <div className="max-w-3xl mx-auto px-4 py-8">
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-warm-900 mb-1">냉장고 재료 관리</h2>
+            <p className="text-warm-400 text-sm">냉장고에 있는 재료를 등록하고 관리하세요.</p>
+          </div>
+
+          <Card className="mb-8">
+            <h3 className="text-base font-semibold text-warm-800 mb-4 flex items-center gap-2">
+              <span role="img" aria-label="재료 추가">&#x2795;</span> 재료 추가
+            </h3>
+            <form onSubmit={handleSubmit}>
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                <div className="sm:col-span-5">
+                  <input type="text" value={name}
+                    onChange={e => setName(e.target.value)}
+                    placeholder="재료 이름"
+                    className="w-full px-4 py-2.5 rounded-xl border-2 border-warm-200 focus:border-warm-400
+                      focus:outline-none focus:ring-4 focus:ring-warm-100 placeholder:text-warm-300
+                      text-warm-900 bg-white transition-all duration-200" />
+                </div>
+                <div className="sm:col-span-3">
+                  <input type="text" value={quantity}
+                    onChange={e => setQuantity(e.target.value)}
+                    placeholder="수량 (예: 2개)"
+                    className="w-full px-4 py-2.5 rounded-xl border-2 border-warm-200 focus:border-warm-400
+                      focus:outline-none focus:ring-4 focus:ring-warm-100 placeholder:text-warm-300
+                      text-warm-900 bg-white transition-all duration-200" />
+                </div>
+                <div className="sm:col-span-2">
+                  <select value={category}
+                    onChange={e => setCategory(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-xl border-2 border-warm-200 focus:border-warm-400
+                      focus:outline-none focus:ring-4 focus:ring-warm-100 text-warm-900 bg-white
+                      transition-all duration-200">
+                    <option value="냉장">냉장</option>
+                    <option value="냉동">냉동</option>
+                    <option value="상온">상온</option>
+                    <option value="기타">기타</option>
+                  </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <Button type="submit" disabled={!name.trim() || submitting} className="w-full">
+                    {submitting ? '추가 중...' : '추가'}
+                  </Button>
+                </div>
+              </div>
+              {formError && <p className="mt-2 text-sm text-red-500">{formError}</p>}
+            </form>
+          </Card>
+
+          <Card>
+            <h3 className="text-base font-semibold text-warm-800 mb-4 flex items-center gap-2">
+              <span role="img" aria-label="냉장고">&#x1F9CA;</span> 보유 재료
+              <span className="ml-auto text-xs font-normal text-warm-400 bg-warm-100 px-2 py-0.5 rounded-full">
+                {ingredients.length}개
+              </span>
+            </h3>
+
+            {loading ? (
+              <div className="text-center py-12 text-warm-400 text-sm">불러오는 중...</div>
+            ) : error ? (
+              <div className="text-center py-12 text-red-500 text-sm">에러: {error}</div>
+            ) : ingredients.length === 0 ? (
+              <EmptyState
+                icon="&#x1F373;"
+                title="등록된 재료가 없습니다"
+                description="위 입력창에서 재료를 추가해 보세요!"
+              />
+            ) : (
+              <div className="space-y-5">
+                {categoryOrder.map(cat => {
+                  const items = grouped[cat];
+                  if (!items || items.length === 0) return null;
+                  const style = CATEGORY_STYLES[cat] || CATEGORY_STYLES['기타'];
+                  return (
+                    <div key={cat} className={`rounded-xl border ${style.border} ${style.bg} p-4`}>
+                      <div className={`text-xs font-semibold uppercase mb-2 flex items-center gap-1 ${style.label}`}>
+                        <span>{style.icon}</span>
+                        <span>{cat}</span>
+                        <span className="ml-1 opacity-60">· {items.length}개</span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {items.map(ing => (
+                          <IngredientChip key={ing.id} ingredient={ing} onRemove={removeIngredient} />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Page: Recipe List
+    // ========================================
+
+    function RecipeListPage() {
+      const { recipes, loading, error, deleteRecipe } = useData();
+      const { navigate } = useRouter();
+      const [deleteTarget, setDeleteTarget] = useState(null);
+      const [deleting, setDeleting] = useState(false);
+
+      const handleDelete = async () => {
+        if (!deleteTarget) return;
+        try {
+          setDeleting(true);
+          await deleteRecipe(deleteTarget);
+          setDeleteTarget(null);
+        } catch (err) {
+          alert('삭제 실패: ' + err.message);
+        } finally {
+          setDeleting(false);
+        }
+      };
+
+      return (
+        <div className="max-w-3xl mx-auto px-4 py-8">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h2 className="text-2xl font-bold text-warm-900 mb-1">레시피 목록</h2>
+              <p className="text-warm-400 text-sm">저장된 레시피를 확인하세요.</p>
+            </div>
+            <Button onClick={() => navigate('/recipes/new')}>
+              <span className="mr-1">+</span> 새 레시피
+            </Button>
+          </div>
+
+          {loading ? (
+            <Card>
+              <div className="text-center py-12 text-warm-400 text-sm">불러오는 중...</div>
+            </Card>
+          ) : error ? (
+            <Card>
+              <div className="text-center py-12 text-red-500 text-sm">에러: {error}</div>
+            </Card>
+          ) : recipes.length === 0 ? (
+            <Card>
+              <EmptyState
+                icon="&#x1F4D6;"
+                title="저장된 레시피가 없습니다"
+                description="새 레시피를 추가하여 나만의 요리 목록을 만들어 보세요!"
+              />
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {recipes.map(recipe => (
+                <Card key={recipe.id} className="hover:shadow-lg transition-shadow duration-200">
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <h3 className="text-lg font-bold text-warm-900 flex items-center gap-2">
+                        <span role="img" aria-label="요리">&#x1F35C;</span> {recipe.title}
+                      </h3>
+                      <p className="text-xs text-warm-400 mt-0.5">
+                        {new Date(recipe.createdAt).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}
+                      </p>
+                    </div>
+                    <button onClick={() => setDeleteTarget(recipe.id)}
+                      className="text-warm-300 hover:text-red-500 transition-colors p-1 rounded-lg hover:bg-red-50"
+                      aria-label="삭제">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  {recipe.ingredients && recipe.ingredients.length > 0 && (
+                    <div className="mb-3">
+                      <p className="text-xs font-medium text-warm-500 mb-1.5">재료</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {recipe.ingredients.map(ing => (
+                          <Tag key={ing} name={ing} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {recipe.steps && recipe.steps.length > 0 && (
+                    <div className="mb-3">
+                      <p className="text-xs font-medium text-warm-500 mb-1.5">조리 단계</p>
+                      <ol className="text-sm text-warm-700 space-y-1 list-decimal list-inside">
+                        {recipe.steps.map((step, idx) => (
+                          <li key={idx} className="leading-relaxed">{step}</li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
+
+                  {recipe.instructions && (
+                    <div>
+                      <p className="text-xs font-medium text-warm-500 mb-1">조리법</p>
+                      <p className="text-sm text-warm-700 whitespace-pre-line leading-relaxed line-clamp-3">
+                        {recipe.instructions}
+                      </p>
+                    </div>
+                  )}
+                </Card>
+              ))}
+            </div>
+          )}
+
+          <Modal isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="레시피 삭제">
+            <p className="text-warm-600 mb-6">이 레시피를 삭제하시겠습니까? 삭제 후에는 복구할 수 없습니다.</p>
+            <div className="flex gap-3 justify-end">
+              <Button variant="ghost" onClick={() => setDeleteTarget(null)} disabled={deleting}>취소</Button>
+              <Button variant="danger" onClick={handleDelete} disabled={deleting}>
+                {deleting ? '삭제 중...' : '삭제'}
+              </Button>
+            </div>
+          </Modal>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Page: New Recipe
+    // ========================================
+
+    function NewRecipePage() {
+      const { addRecipe, ingredients: fridgeIngredients } = useData();
+      const { navigate } = useRouter();
+      const [title, setTitle] = useState('');
+      const [ingredients, setIngredients] = useState([]);
+      const [instructions, setInstructions] = useState('');
+      const [stepsText, setStepsText] = useState('');
+      const [errors, setErrors] = useState({});
+      const [submitting, setSubmitting] = useState(false);
+
+      const handleAddIngredient = (ing) => {
+        if (!ingredients.includes(ing)) {
+          setIngredients(prev => [...prev, ing]);
+        }
+      };
+
+      const handleRemoveIngredient = (ing) => {
+        setIngredients(prev => prev.filter(i => i !== ing));
+      };
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        const newErrors = {};
+        if (!title.trim()) newErrors.title = '요리명을 입력해 주세요.';
+        if (ingredients.length === 0) newErrors.ingredients = '재료를 하나 이상 추가해 주세요.';
+        if (!instructions.trim()) newErrors.instructions = '조리법을 입력해 주세요.';
+
+        if (Object.keys(newErrors).length > 0) {
+          setErrors(newErrors);
+          return;
+        }
+
+        const steps = stepsText
+          .split('\n')
+          .map(s => s.trim())
+          .filter(s => s.length > 0);
+
+        try {
+          setSubmitting(true);
+          await addRecipe({
+            title: title.trim(),
+            ingredients,
+            instructions: instructions.trim(),
+            steps,
+          });
+          navigate('/recipes');
+        } catch (err) {
+          setErrors({ submit: err.message });
+        } finally {
+          setSubmitting(false);
+        }
+      };
+
+      // Filter fridge ingredients that haven't been added yet (fridgeIngredients are objects)
+      const availableFridgeIngredients = fridgeIngredients.filter(i => !ingredients.includes(i.name));
+
+      return (
+        <div className="max-w-3xl mx-auto px-4 py-8">
+          <div className="mb-8">
+            <button onClick={() => navigate('/recipes')}
+              className="text-warm-400 hover:text-warm-600 text-sm flex items-center gap-1 mb-3 transition-colors">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              레시피 목록으로
+            </button>
+            <h2 className="text-2xl font-bold text-warm-900 mb-1">새 레시피 작성</h2>
+            <p className="text-warm-400 text-sm">나만의 레시피를 등록하세요.</p>
+          </div>
+
+          <form onSubmit={handleSubmit}>
+            <Card className="mb-6">
+              <h3 className="text-base font-semibold text-warm-800 mb-4 flex items-center gap-2">
+                <span role="img" aria-label="요리명">&#x1F468;&#x200D;&#x1F373;</span> 기본 정보
+              </h3>
+              <Input
+                label="요리명"
+                value={title}
+                onChange={e => { setTitle(e.target.value); setErrors(prev => ({ ...prev, title: null })); }}
+                placeholder="예: 김치찌개, 된장찌개, 파스타..."
+                error={errors.title}
+              />
+            </Card>
+
+            <Card className="mb-6">
+              <h3 className="text-base font-semibold text-warm-800 mb-4 flex items-center gap-2">
+                <span role="img" aria-label="재료">&#x1F966;</span> 재료
+              </h3>
+              <TagInput
+                tags={ingredients}
+                onAdd={handleAddIngredient}
+                onRemove={handleRemoveIngredient}
+                placeholder="재료를 입력하고 Enter를 누르세요"
+              />
+              {errors.ingredients && <p className="mt-2 text-sm text-red-500">{errors.ingredients}</p>}
+
+              {availableFridgeIngredients.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-warm-100">
+                  <p className="text-xs font-medium text-warm-500 mb-2">
+                    <span role="img" aria-label="냉장고">&#x1F9CA;</span> 냉장고 재료에서 추가
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {availableFridgeIngredients.map(ing => (
+                      <button key={ing.id} type="button" onClick={() => handleAddIngredient(ing.name)}
+                        className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium border
+                          border-dashed border-warm-300 text-warm-500 hover:border-warm-400 hover:text-warm-700
+                          hover:bg-warm-50 transition-all duration-200`}>
+                        + {ing.name}
+                        {ing.quantity && <span className="text-xs opacity-60">{ing.quantity}</span>}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </Card>
+
+            <Card className="mb-6">
+              <h3 className="text-base font-semibold text-warm-800 mb-4 flex items-center gap-2">
+                <span role="img" aria-label="조리법">&#x1F4DD;</span> 조리법
+              </h3>
+              <Textarea
+                label="전체 조리법"
+                value={instructions}
+                onChange={e => { setInstructions(e.target.value); setErrors(prev => ({ ...prev, instructions: null })); }}
+                placeholder={"1. 재료를 준비합니다.\n2. 팬에 기름을 두르고...\n3. 약불에서 10분간 끓입니다."}
+                rows={6}
+              />
+              {errors.instructions && <p className="mt-2 text-sm text-red-500">{errors.instructions}</p>}
+
+              <div className="mt-4">
+                <Textarea
+                  label="조리 단계 (선택, 한 줄에 한 단계)"
+                  value={stepsText}
+                  onChange={e => setStepsText(e.target.value)}
+                  placeholder={"재료를 준비한다\n팬을 달군다\n양파를 볶는다"}
+                  rows={5}
+                />
+              </div>
+            </Card>
+
+            {errors.submit && <p className="mb-3 text-sm text-red-500 text-right">{errors.submit}</p>}
+
+            <div className="flex gap-3 justify-end">
+              <Button variant="ghost" onClick={() => navigate('/recipes')} disabled={submitting}>취소</Button>
+              <Button type="submit" size="lg" disabled={submitting}>
+                <span className="mr-1" role="img" aria-label="저장">&#x1F4BE;</span>
+                {submitting ? '저장 중...' : '레시피 저장'}
+              </Button>
+            </div>
+          </form>
+        </div>
+      );
+    }
+
+    // ========================================
+    // App Component
+    // ========================================
+
+    function App() {
+      return (
+        <DataProvider>
+          <Router>
+            <div className="min-h-screen bg-gradient-to-b from-warm-50 via-orange-50/30 to-amber-50/20">
+              <Header />
+              <main>
+                <Routes>
+                  <Route path="/" element={<FridgePage />} />
+                  <Route path="/fridge" element={<FridgePage />} />
+                  <Route path="/recipes" element={<RecipeListPage />} />
+                  <Route path="/recipes/new" element={<NewRecipePage />} />
+                </Routes>
+              </main>
+              <footer className="text-center py-8 text-xs text-warm-300">
+                나의 냉장고 - 재료 &amp; 레시피 관리
+              </footer>
+            </div>
+          </Router>
+        </DataProvider>
+      );
+    }
+
+    // ========================================
+    // Rendering
+    // ========================================
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
