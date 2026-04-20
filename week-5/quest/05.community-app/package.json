@@ -10,5 +10,8 @@
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.16.0"
+  },
+  "devDependencies": {
+    "puppeteer": "^24.42.0"
   }
 }
