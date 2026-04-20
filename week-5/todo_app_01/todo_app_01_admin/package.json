@@ -1,0 +1,16 @@
+{
+  "name": "todo-app-01-admin",
+  "version": "1.0.0",
+  "description": "Admin panel backend for Todo App 01",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "pg": "^8.13.1",
+    "bcrypt": "^5.1.1",
+    "jsonwebtoken": "^9.0.2"
+  }
+}

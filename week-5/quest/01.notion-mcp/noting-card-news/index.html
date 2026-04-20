@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>알아차림 카드뉴스 — @the.noting_</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #0a0a0a;
+      font-family: 'Noto Sans KR', sans-serif;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 60px 0;
+    }
+
+    .card-label {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 8px;
+      font-weight: 300;
+    }
+
+    .card {
+      width: 1080px;
+      height: 1350px;
+      background: #1C1C1C;
+      color: #FFFFFF;
+      position: relative;
+      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+      margin-bottom: 40px;
+      overflow: hidden;
+    }
+
+    .card:last-child {
+      margin-bottom: 0;
+    }
+
+    .beige {
+      color: #C8B89A;
+    }
+
+    .fw300 {
+      font-weight: 300;
+    }
+
+    .fw700 {
+      font-weight: 700;
+    }
+
+    .divider {
+      width: 40px;
+      height: 1px;
+      background: #C8B89A;
+    }
+
+    /* ========== Card 1 — Cover ========== */
+    .card-1 {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 80px;
+    }
+
+    .card-1 .badge {
+      position: absolute;
+      top: 60px;
+      left: 60px;
+      border: 1px solid #C8B89A;
+      background: transparent;
+      color: #C8B89A;
+      padding: 6px 16px;
+      font-size: 13px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      font-weight: 300;
+    }
+
+    .card-1 .main-copy {
+      font-size: 44px;
+      font-weight: 700;
+      line-height: 1.6;
+      text-align: center;
+      color: #FFFFFF;
+    }
+
+    .card-1 .divider {
+      margin-top: 30px;
+    }
+
+    .card-1 .sub-text {
+      margin-top: 20px;
+      font-size: 16px;
+      color: #C8B89A;
+      font-weight: 300;
+    }
+
+    .card-1 .handle {
+      position: absolute;
+      bottom: 50px;
+      font-size: 13px;
+      color: #C8B89A;
+      opacity: 0.5;
+    }
+
+    /* ========== Card 2 — Empathy ========== */
+    .card-2 {
+      display: flex;
+      align-items: center;
+      padding: 0 80px;
+    }
+
+    .card-2 .content {
+      font-size: 28px;
+      font-weight: 300;
+      line-height: 2.2;
+      color: #FFFFFF;
+      text-align: left;
+    }
+
+    .card-2 .content .highlight {
+      color: #C8B89A;
+      font-weight: 700;
+    }
+
+    .card-2 .content .gap {
+      display: block;
+      height: 20px;
+    }
+
+    /* ========== Card 3 — Core Message ========== */
+    .card-3 {
+      display: flex;
+      align-items: center;
+      padding: 0 80px;
+    }
+
+    .card-3 .content {
+      font-size: 26px;
+      font-weight: 300;
+      line-height: 2.2;
+      color: #FFFFFF;
+      text-align: left;
+    }
+
+    .card-3 .content .gap {
+      display: block;
+      height: 20px;
+    }
+
+    /* ========== Card 4 — Realization ========== */
+    .card-4 {
+      display: flex;
+      align-items: center;
+      padding: 0 80px;
+    }
+
+    .card-4 .content {
+      font-size: 26px;
+      font-weight: 300;
+      line-height: 2.2;
+      color: #FFFFFF;
+      text-align: left;
+    }
+
+    .card-4 .content .gap {
+      display: block;
+      height: 20px;
+    }
+
+    .card-4 .content .ending {
+      color: #C8B89A;
+      font-size: 30px;
+      font-weight: 700;
+    }
+
+    /* ========== Card 5 — Closing + CTA ========== */
+    .card-5 {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 80px;
+      text-align: center;
+    }
+
+    .card-5 .main-text {
+      font-size: 30px;
+      font-weight: 300;
+      line-height: 2.0;
+      color: #FFFFFF;
+    }
+
+    .card-5 .main-text .gap {
+      display: block;
+      height: 16px;
+    }
+
+    .card-5 .cta-area {
+      margin-top: 50px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .card-5 .cta-text {
+      margin-top: 20px;
+      font-size: 15px;
+      color: #C8B89A;
+      opacity: 0.7;
+      line-height: 1.9;
+    }
+
+    .card-5 .handle {
+      position: absolute;
+      bottom: 50px;
+      font-size: 13px;
+      color: #C8B89A;
+      opacity: 0.4;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ========== Card 1 / 5 — Cover ========== -->
+  <div class="card-label">1 / 5</div>
+  <div class="card card-1">
+    <div class="badge">STORY</div>
+    <div class="main-copy">
+      알아차렸는데<br>
+      왜 또<br>
+      반응했을까요?
+    </div>
+    <div class="divider"></div>
+    <div class="sub-text">그 틈이 답이에요</div>
+    <div class="handle">@the.noting_</div>
+  </div>
+
+  <!-- ========== Card 2 / 5 — Empathy ========== -->
+  <div class="card-label">2 / 5</div>
+  <div class="card card-2">
+    <div class="content">
+      <span class="highlight">저도 그래요.</span>
+      <span class="gap"></span>
+      알아차렸는데<br>
+      그래도 화가 나고
+      <span class="gap"></span>
+      알아차렸는데<br>
+      그래도 상처를 줬어요.
+    </div>
+  </div>
+
+  <!-- ========== Card 3 / 5 — Core Message ========== -->
+  <div class="card-label">3 / 5</div>
+  <div class="card card-3">
+    <div class="content">
+      알아차림이<br>
+      반응을 없애주지는 않아요.
+      <span class="gap"></span>
+      <span class="beige fw700">대신</span>
+      <span class="gap"></span>
+      자극과 반응 사이에<br>
+      <span class="beige">아주 작은 틈을</span><br>
+      만들어줘요.
+    </div>
+  </div>
+
+  <!-- ========== Card 4 / 5 — Realization ========== -->
+  <div class="card-label">4 / 5</div>
+  <div class="card card-4">
+    <div class="content">
+      그 틈이 생기는 순간
+      <span class="gap"></span>
+      나는 더 이상<br>
+      반응에 끌려가는 게 아니라
+      <span class="gap"></span>
+      <span class="ending">바라보는 사람이 돼요.</span>
+    </div>
+  </div>
+
+  <!-- ========== Card 5 / 5 — Closing + CTA ========== -->
+  <div class="card-label">5 / 5</div>
+  <div class="card card-5">
+    <div class="main-text">
+      알아차림은<br>
+      완벽해지는 게 아니에요.
+      <span class="gap"></span>
+      조금씩,<br>
+      <span class="beige fw700">그 틈이 넓어지는 거예요.</span>
+    </div>
+    <div class="cta-area">
+      <div class="divider"></div>
+      <div class="cta-text">
+        오늘 알아차렸는데 또 반응한 순간이 있나요?<br>
+        댓글로 나눠줘요 🤍
+      </div>
+    </div>
+    <div class="handle">@the.noting_</div>
+  </div>
+
+</body>
+</html>

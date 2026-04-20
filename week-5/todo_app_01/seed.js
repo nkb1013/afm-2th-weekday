@@ -14,6 +14,7 @@ async function seed() {
       email VARCHAR(255) UNIQUE NOT NULL,
       password_hash VARCHAR(255) NOT NULL,
       nickname VARCHAR(50) NOT NULL,
+      role VARCHAR(20) DEFAULT 'user',
       created_at TIMESTAMP DEFAULT NOW()
     )
   `);
@@ -24,11 +25,25 @@ async function seed() {
     ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES todo_app_01_users(id)
   `);
 
+  // Add role column if missing
+  await pool.query(`
+    ALTER TABLE todo_app_01_users
+    ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'user'
+  `);
+
   // 3. Clear existing demo data
   await pool.query(`DELETE FROM todo_app_01`);
   await pool.query(`DELETE FROM todo_app_01_users`);
 
-  // 4. Insert 2 demo users (password: 1234)
+  // 4. Insert super admin
+  const adminHash = await bcrypt.hash('12345678', 10);
+  const admin = await pool.query(
+    `INSERT INTO todo_app_01_users (email, password_hash, nickname, role) VALUES ($1, $2, $3, $4) RETURNING id`,
+    ['keumbi.noh@gmail.com', adminHash, '슈퍼관리자', 'admin']
+  );
+  const adminId = admin.rows[0].id;
+
+  // 5. Insert 2 demo users (password: 1234)
   const hash = await bcrypt.hash('1234', 10);
 
   const user1 = await pool.query(
@@ -62,6 +77,7 @@ async function seed() {
   }
 
   console.log('Seed complete!');
+  console.log(`  keumbi.noh@gmail.com (pw: 12345678, role: admin) → ${adminId}`);
   console.log(`  alice@test.com (pw: 1234) → ${aliceId}`);
   console.log(`  bob@test.com   (pw: 1234) → ${bobId}`);
 

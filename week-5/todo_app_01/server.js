@@ -25,6 +25,7 @@ async function initDB() {
       email VARCHAR(255) UNIQUE NOT NULL,
       password_hash VARCHAR(255) NOT NULL,
       nickname VARCHAR(50) NOT NULL,
+      role VARCHAR(20) DEFAULT 'user',
       created_at TIMESTAMP DEFAULT NOW()
     )
   `);
@@ -36,6 +37,11 @@ async function initDB() {
       done BOOLEAN DEFAULT false,
       created_at TIMESTAMP DEFAULT NOW()
     )
+  `);
+  // Add role column if missing (for existing tables)
+  await pool.query(`
+    ALTER TABLE todo_app_01_users
+    ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'user'
   `);
   dbInitialized = true;
 }
@@ -89,8 +95,8 @@ app.post('/api/auth/signup', async (req, res) => {
       [email, hash, nickname]
     );
     const user = result.rows[0];
-    const token = jwt.sign({ id: user.id, email: user.email, nickname: user.nickname }, JWT_SECRET, { expiresIn: '7d' });
-    res.status(201).json({ success: true, data: { token, user } });
+    const token = jwt.sign({ id: user.id, email: user.email, nickname: user.nickname, role: 'user' }, JWT_SECRET, { expiresIn: '7d' });
+    res.status(201).json({ success: true, data: { token, user: { ...user, role: 'user' } } });
   } catch (err) {
     console.error('Signup error:', err);
     res.status(500).json({ success: false, message: '회원가입에 실패했습니다' });
@@ -113,8 +119,8 @@ app.post('/api/auth/login', async (req, res) => {
     if (!valid) {
       return res.status(401).json({ success: false, message: '이메일 또는 비밀번호가 잘못되었습니다' });
     }
-    const token = jwt.sign({ id: user.id, email: user.email, nickname: user.nickname }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ success: true, data: { token, user: { id: user.id, email: user.email, nickname: user.nickname } } });
+    const token = jwt.sign({ id: user.id, email: user.email, nickname: user.nickname, role: user.role || 'user' }, JWT_SECRET, { expiresIn: '7d' });
+    res.json({ success: true, data: { token, user: { id: user.id, email: user.email, nickname: user.nickname, role: user.role || 'user' } } });
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ success: false, message: '로그인에 실패했습니다' });
@@ -122,8 +128,88 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // GET /api/auth/me - 토큰으로 유저 정보 확인
-app.get('/api/auth/me', auth, (req, res) => {
-  res.json({ success: true, data: req.user });
+app.get('/api/auth/me', auth, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT id, email, nickname, role FROM todo_app_01_users WHERE id = $1', [req.user.id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: '유저를 찾을 수 없습니다' });
+    }
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    res.json({ success: true, data: req.user });
+  }
+});
+
+// ── Admin Middleware ────────────────────────────────────
+function adminOnly(req, res, next) {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, message: '관리자 권한이 필요합니다' });
+  }
+  next();
+}
+
+// ── Admin Routes (슈퍼관리자 전용) ─────────────────────
+
+// GET /api/admin/users - 전체 유저 목록
+app.get('/api/admin/users', auth, adminOnly, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, email, nickname, role, created_at FROM todo_app_01_users ORDER BY created_at DESC'
+    );
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error('Admin users error:', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch users' });
+  }
+});
+
+// GET /api/admin/todos - 전체 할일 목록 (모든 유저)
+app.get('/api/admin/todos', auth, adminOnly, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT t.*, u.email, u.nickname
+      FROM todo_app_01 t
+      JOIN todo_app_01_users u ON t.user_id = u.id
+      ORDER BY t.created_at DESC
+    `);
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error('Admin todos error:', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch all todos' });
+  }
+});
+
+// DELETE /api/admin/todos/:id - 관리자가 아무 할일이나 삭제
+app.delete('/api/admin/todos/:id', auth, adminOnly, async (req, res) => {
+  try {
+    const result = await pool.query('DELETE FROM todo_app_01 WHERE id = $1 RETURNING *', [req.params.id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Todo not found' });
+    }
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    console.error('Admin delete todo error:', err);
+    res.status(500).json({ success: false, message: 'Failed to delete todo' });
+  }
+});
+
+// DELETE /api/admin/users/:id - 관리자가 유저 삭제 (해당 유저의 할일도 삭제)
+app.delete('/api/admin/users/:id', auth, adminOnly, async (req, res) => {
+  try {
+    const userId = req.params.id;
+    if (parseInt(userId) === req.user.id) {
+      return res.status(400).json({ success: false, message: '자기 자신은 삭제할 수 없습니다' });
+    }
+    await pool.query('DELETE FROM todo_app_01 WHERE user_id = $1', [userId]);
+    const result = await pool.query('DELETE FROM todo_app_01_users WHERE id = $1 RETURNING id, email, nickname', [userId]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    console.error('Admin delete user error:', err);
+    res.status(500).json({ success: false, message: 'Failed to delete user' });
+  }
 });
 
 // ── Todo Routes (인증 필요) ─────────────────────────────

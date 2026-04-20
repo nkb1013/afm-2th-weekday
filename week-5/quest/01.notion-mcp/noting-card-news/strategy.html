@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>콘텐츠 확산 전략 — @the.noting_</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            dark: '#0f0f0f',
+            card: '#1a1a1a',
+            beige: '#C8B89A',
+            cardStory: '#1C1C1C',
+          },
+          fontFamily: {
+            sans: ['Noto Sans KR', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    html { scroll-behavior: smooth; }
+    body { background: #0f0f0f; font-family: 'Noto Sans KR', sans-serif; margin: 0; }
+    ::-webkit-scrollbar { height: 6px; }
+    ::-webkit-scrollbar-track { background: #1a1a1a; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb { background: #C8B89A; border-radius: 3px; }
+    .story-scroll { scroll-snap-type: x mandatory; }
+    .story-scroll > * { scroll-snap-align: start; }
+    .timeline-line { position: absolute; left: 12px; top: 28px; bottom: 0; width: 2px; background: #333; }
+    .pipeline-line { position: absolute; top: 50%; left: 0; right: 0; height: 2px; background: #333; z-index: 0; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    // ========================================
+    // React Hooks Destructuring
+    // ========================================
+    const { useState, useEffect, useRef } = React;
+
+    // ========================================
+    // 🎨 Design System Components
+    // ========================================
+
+    function SectionTitle({ icon, title, id }) {
+      return (
+        <h2 id={id} className="text-2xl font-bold text-white mb-6 pt-20 -mt-16 flex items-center gap-3">
+          <span className="text-2xl">{icon}</span>
+          <span>{title}</span>
+          <div className="flex-1 h-px bg-gradient-to-r from-beige/30 to-transparent ml-4"></div>
+        </h2>
+      );
+    }
+
+    function Card({ children, className = '' }) {
+      return (
+        <div className={`bg-card rounded-xl border border-white/5 p-6 ${className}`}>
+          {children}
+        </div>
+      );
+    }
+
+    function Badge({ children, color = 'beige' }) {
+      const colors = {
+        beige: 'bg-beige/15 text-beige border-beige/30',
+        green: 'bg-green-500/15 text-green-400 border-green-500/30',
+        blue: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+      };
+      return (
+        <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium border ${colors[color]}`}>
+          {children}
+        </span>
+      );
+    }
+
+    // ========================================
+    // 🧩 Navigation Component
+    // ========================================
+
+    function NavBar() {
+      const [active, setActive] = useState('');
+      const links = [
+        { id: 'reels', label: '릴스' },
+        { id: 'story', label: '스토리' },
+        { id: 'analytics', label: '분석' },
+        { id: 'pipeline', label: '파이프라인' },
+        { id: 'strategy', label: '전략' },
+      ];
+
+      useEffect(() => {
+        const handleScroll = () => {
+          const sections = links.map(l => document.getElementById(l.id));
+          let current = '';
+          sections.forEach(sec => {
+            if (sec) {
+              const rect = sec.getBoundingClientRect();
+              if (rect.top <= 100) current = sec.id;
+            }
+          });
+          setActive(current);
+        };
+        window.addEventListener('scroll', handleScroll);
+        return () => window.removeEventListener('scroll', handleScroll);
+      }, []);
+
+      return (
+        <nav className="sticky top-0 z-50 bg-dark/90 backdrop-blur-md border-b border-white/5">
+          <div className="max-w-[1200px] mx-auto px-6 flex items-center justify-between h-12">
+            <span className="text-beige font-semibold text-sm">@the.noting_</span>
+            <div className="flex gap-1">
+              {links.map(link => (
+                <a
+                  key={link.id}
+                  href={`#${link.id}`}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    active === link.id
+                      ? 'text-beige bg-beige/10'
+                      : 'text-white/50 hover:text-white/80 hover:bg-white/5'
+                  }`}
+                >
+                  {link.label}
+                </a>
+              ))}
+            </div>
+          </div>
+        </nav>
+      );
+    }
+
+    // ========================================
+    // 📄 Header Section
+    // ========================================
+
+    function Header() {
+      const summaryCards = [
+        { icon: '📱', label: '카드뉴스', status: '완료 ✅', type: 'green' },
+        { icon: '🎬', label: '릴스', status: '대본 준비됨', type: 'beige' },
+        { icon: '📊', label: '스토리', status: '5장 시퀀스', type: 'blue' },
+      ];
+
+      return (
+        <header className="pt-12 pb-8">
+          <div className="mb-2 text-beige/60 text-sm font-medium tracking-wider uppercase">Content Strategy Dashboard</div>
+          <h1 className="text-4xl font-bold text-white mb-2">
+            📋 콘텐츠 확산 전략
+          </h1>
+          <p className="text-white/50 text-lg mb-8">
+            "알아차렸는데 왜 또 반응했을까요?" — 4/20 월요일
+          </p>
+          <div className="grid grid-cols-3 gap-4">
+            {summaryCards.map((card, i) => (
+              <Card key={i} className={`flex items-center gap-4 ${
+                card.type === 'green' ? 'border-green-500/20 bg-green-500/5' : ''
+              }`}>
+                <div className="text-3xl">{card.icon}</div>
+                <div>
+                  <div className="text-white/50 text-sm">{card.label}</div>
+                  <div className={`font-semibold ${
+                    card.type === 'green' ? 'text-green-400' :
+                    card.type === 'beige' ? 'text-beige' : 'text-blue-400'
+                  }`}>{card.status}</div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </header>
+      );
+    }
+
+    // ========================================
+    // 📄 Section 1: Reels Script
+    // ========================================
+
+    function ReelsSection() {
+      const scenes = [
+        { time: '0-3초', screen: '정면 응시, 살짝 고개 기울임', subtitle: '"알아차렸는데 또 반응한 적 있나요?"', tone: '담담하게' },
+        { time: '3-8초', screen: '시선 살짝 내림', subtitle: '"저도 그래요. 알아차렸는데 그래도 화가 나고, 상처를 줬어요."', tone: '솔직하게' },
+        { time: '8-15초', screen: '카메라 천천히 줌인', subtitle: '"알아차림은 반응을 없애주지 않아요."\n2초 pause\n"대신, 자극과 반응 사이에 아주 작은 틈을 만들어줘요."', tone: '전환, 힘 실어서' },
+        { time: '15-20초', screen: '자연광, 편안한 표정', subtitle: '"그 틈이 생기는 순간, 바라보는 사람이 돼요."', tone: '따뜻하게' },
+        { time: '20-25초', screen: '미소, 정면', subtitle: '"완벽해지는 게 아니에요. 그 틈이 조금씩 넓어지는 거예요."\n"오늘 그런 순간 있었나요? 💬"', tone: '마무리' },
+      ];
+
+      const shootingGuide = [
+        { label: '조명', value: '자연광 or 따뜻한 간접광' },
+        { label: '배경', value: '심플한 공간, 어두운 톤' },
+        { label: '복장', value: '편안한 뉴트럴 톤' },
+        { label: '편집', value: '컷 최소화, 자연스러운 호흡 살리기' },
+        { label: 'BGM', value: '잔잔한 피아노 or 무음' },
+        { label: '길이', value: '25초 이내' },
+        { label: '자막 폰트', value: '흰색, 깔끔한 산세리프' },
+      ];
+
+      return (
+        <section>
+          <SectionTitle icon="🎬" title="릴스 대본 (Reels Script)" id="reels" />
+          <div className="grid grid-cols-3 gap-6">
+            {/* Storyboard Timeline */}
+            <div className="col-span-2">
+              <Card>
+                <h3 className="text-beige font-semibold mb-6 text-sm tracking-wider uppercase">Storyboard Timeline</h3>
+                <div className="relative">
+                  {scenes.map((scene, i) => (
+                    <div key={i} className="relative flex gap-4 mb-6 last:mb-0">
+                      {/* Timeline dot and line */}
+                      <div className="flex flex-col items-center">
+                        <div className="w-6 h-6 rounded-full bg-beige/20 border-2 border-beige flex items-center justify-center flex-shrink-0">
+                          <span className="text-[10px] text-beige font-bold">{i + 1}</span>
+                        </div>
+                        {i < scenes.length - 1 && (
+                          <div className="w-px flex-1 bg-white/10 mt-2"></div>
+                        )}
+                      </div>
+                      {/* Scene content */}
+                      <div className="flex-1 bg-white/3 rounded-lg p-4 border border-white/5">
+                        <div className="flex items-center gap-3 mb-2">
+                          <Badge color="beige">씬 {i + 1}</Badge>
+                          <span className="text-white/40 text-xs">{scene.time}</span>
+                          <span className="ml-auto text-xs text-beige/60">톤: {scene.tone}</span>
+                        </div>
+                        <div className="text-white/50 text-sm mb-2">
+                          <span className="text-white/30">화면:</span> {scene.screen}
+                        </div>
+                        <div className="text-white text-sm leading-relaxed whitespace-pre-line">
+                          {scene.subtitle}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </div>
+
+            {/* Shooting Guide */}
+            <div>
+              <Card className="h-full">
+                <h3 className="text-beige font-semibold mb-6 text-sm tracking-wider uppercase">촬영 가이드</h3>
+                <div className="space-y-4">
+                  {shootingGuide.map((item, i) => (
+                    <div key={i} className="flex flex-col">
+                      <span className="text-white/40 text-xs uppercase tracking-wider mb-1">{item.label}</span>
+                      <span className="text-white text-sm">{item.value}</span>
+                      {i < shootingGuide.length - 1 && <div className="border-b border-white/5 mt-3"></div>}
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    // ========================================
+    // 📄 Section 2: Story Sequence
+    // ========================================
+
+    function StorySection() {
+      return (
+        <section>
+          <SectionTitle icon="📱" title="스토리 시퀀스 (5장)" id="story" />
+          <div className="story-scroll flex gap-5 overflow-x-auto pb-4 px-1">
+            {/* Story 1 - Teaser */}
+            <div className="flex-shrink-0 w-[270px] h-[480px] bg-cardStory rounded-2xl border border-white/5 flex flex-col justify-between p-6 relative overflow-hidden">
+              <div className="absolute top-3 right-3"><Badge>1/5</Badge></div>
+              <div className="text-white/50 text-sm mt-4">오늘 카드뉴스 올렸어요</div>
+              <div className="text-center">
+                <p className="text-white text-xl font-bold leading-relaxed">
+                  알아차렸는데<br/>또 반응한 적<br/>있나요?
+                </p>
+              </div>
+              <div className="text-beige/70 text-sm text-center">
+                ← 밀어서 피드 보기
+              </div>
+            </div>
+
+            {/* Story 2 - Poll */}
+            <div className="flex-shrink-0 w-[270px] h-[480px] bg-cardStory rounded-2xl border border-white/5 flex flex-col p-6 relative overflow-hidden">
+              <div className="absolute top-3 right-3"><Badge>2/5</Badge></div>
+              <div className="text-white/50 text-sm mt-4 mb-auto">솔직히 말해봐요</div>
+              <div className="text-center mb-8">
+                <p className="text-white text-lg font-semibold mb-6">
+                  알아차렸는데<br/>또 반응한 적?
+                </p>
+                <div className="space-y-3">
+                  <button className="w-full py-3 rounded-full border-2 border-beige/40 text-white text-sm hover:bg-beige/10 transition">
+                    매일 그래요 😅
+                  </button>
+                  <button className="w-full py-3 rounded-full border-2 border-beige/40 text-white text-sm hover:bg-beige/10 transition">
+                    가끔 그래요
+                  </button>
+                </div>
+              </div>
+              <div></div>
+            </div>
+
+            {/* Story 3 - Core Message */}
+            <div className="flex-shrink-0 w-[270px] h-[480px] bg-cardStory rounded-2xl border border-white/5 flex flex-col justify-center p-6 relative overflow-hidden">
+              <div className="absolute top-3 right-3"><Badge>3/5</Badge></div>
+              <div className="text-center">
+                <p className="text-white text-xl font-bold leading-relaxed mb-6">
+                  반응을 없애는 게<br/>아니에요
+                </p>
+                <div className="w-12 h-px bg-beige/40 mx-auto mb-6"></div>
+                <p className="text-beige text-base leading-relaxed font-medium">
+                  자극과 반응 사이<br/>작은 틈을<br/>만드는 거예요
+                </p>
+              </div>
+            </div>
+
+            {/* Story 4 - Question */}
+            <div className="flex-shrink-0 w-[270px] h-[480px] bg-cardStory rounded-2xl border border-white/5 flex flex-col p-6 relative overflow-hidden">
+              <div className="absolute top-3 right-3"><Badge>4/5</Badge></div>
+              <div className="text-white/50 text-sm mt-4">여러분의 이야기</div>
+              <div className="flex-1 flex flex-col justify-center">
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-4">
+                  <div className="text-white/30 text-sm">오늘 반응해버린 순간은?</div>
+                  <div className="mt-8 border-b border-white/10"></div>
+                </div>
+              </div>
+              <div className="text-white/40 text-sm text-center">
+                솔직하게 나눠줘요 🤍
+              </div>
+            </div>
+
+            {/* Story 5 - CTA */}
+            <div className="flex-shrink-0 w-[270px] h-[480px] bg-cardStory rounded-2xl border border-white/5 flex flex-col justify-center items-center p-6 relative overflow-hidden">
+              <div className="absolute top-3 right-3"><Badge>5/5</Badge></div>
+              <p className="text-white text-xl font-bold text-center leading-relaxed mb-8">
+                자세한 이야기는<br/>오늘 카드뉴스에 💌
+              </p>
+              <div className="flex items-center gap-3 bg-white/5 rounded-full px-5 py-3 border border-white/10">
+                <div className="w-10 h-10 rounded-full bg-beige/20 border-2 border-beige flex items-center justify-center text-beige text-xs font-bold">N</div>
+                <div>
+                  <div className="text-white text-sm font-medium">@the.noting_</div>
+                  <div className="text-beige/70 text-xs">피드 보러가기 →</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    // ========================================
+    // 📄 Section 3: Analytics Framework
+    // ========================================
+
+    function AnalyticsSection() {
+      const kpiData = [
+        { metric: '저장 수', h24: '15+', h48: '30+', d7: '50+', meaning: '콘텐츠 가치 = 팔로워 전환 핵심' },
+        { metric: '공유 수', h24: '5+', h48: '10+', d7: '20+', meaning: '도달 확장 = 신규 유입' },
+        { metric: '댓글 수', h24: '8+', h48: '15+', d7: '25+', meaning: '알고리즘 부스트 신호' },
+        { metric: '도달', h24: '500+', h48: '1,000+', d7: '2,000+', meaning: '탐색 탭 노출 기준' },
+        { metric: '프로필 방문', h24: '20+', h48: '40+', d7: '80+', meaning: '팔로우 전환 전단계' },
+      ];
+
+      const checkpoints = [
+        {
+          time: '업로드 직후 (0-1h)',
+          tasks: [
+            '스토리 1~5장 순차 업로드',
+            '첫 댓글에 금비 본인 코멘트 고정 ("저도 오늘 그랬어요 🤍")',
+          ]
+        },
+        {
+          time: '3시간 후',
+          tasks: [
+            '댓글 전체 답글 달기',
+            '스토리 투표 결과 캡처 → 추가 스토리로 공유',
+          ]
+        },
+        {
+          time: '24시간 후',
+          tasks: [
+            '저장/공유 수 체크',
+            '저장 30 미만이면 → 릴스 업로드 시점 앞당기기',
+            '저장 30 이상이면 → 예정대로 진행',
+          ]
+        },
+        {
+          time: '48시간 후',
+          tasks: [
+            '릴스 업로드 (수요일)',
+            '카드뉴스 댓글 중 좋은 반응 스크린샷 → 릴스 인트로에 활용',
+          ]
+        },
+        {
+          time: '7일 후',
+          tasks: [
+            '전체 성과 리뷰',
+            '리트릿 예고 콘텐츠에 이 포스트 언급하며 연결',
+          ]
+        },
+      ];
+
+      return (
+        <section>
+          <SectionTitle icon="📊" title="성과 분석 프레임워크" id="analytics" />
+          <div className="grid grid-cols-2 gap-6">
+            {/* KPI Table */}
+            <Card>
+              <h3 className="text-beige font-semibold mb-4 text-sm tracking-wider uppercase">핵심 KPI</h3>
+              <div className="overflow-hidden rounded-lg border border-white/5">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-white/3">
+                      <th className="text-left text-white/40 font-medium px-3 py-2.5">지표</th>
+                      <th className="text-center text-white/40 font-medium px-3 py-2.5">24h</th>
+                      <th className="text-center text-white/40 font-medium px-3 py-2.5">48h</th>
+                      <th className="text-center text-white/40 font-medium px-3 py-2.5">7일</th>
+                      <th className="text-left text-white/40 font-medium px-3 py-2.5">의미</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {kpiData.map((row, i) => (
+                      <tr key={i} className="border-t border-white/5 hover:bg-white/3 transition">
+                        <td className="text-white font-medium px-3 py-2.5">{row.metric}</td>
+                        <td className="text-center text-beige px-3 py-2.5">{row.h24}</td>
+                        <td className="text-center text-beige px-3 py-2.5">{row.h48}</td>
+                        <td className="text-center text-beige font-semibold px-3 py-2.5">{row.d7}</td>
+                        <td className="text-white/40 px-3 py-2.5 text-xs">{row.meaning}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+
+            {/* Checkpoint Timeline */}
+            <Card>
+              <h3 className="text-beige font-semibold mb-4 text-sm tracking-wider uppercase">체크포인트 타임라인</h3>
+              <div className="space-y-0">
+                {checkpoints.map((cp, i) => (
+                  <div key={i} className="relative flex gap-4 pb-5 last:pb-0">
+                    <div className="flex flex-col items-center">
+                      <div className="w-6 h-6 rounded-full bg-beige/15 border-2 border-beige/60 flex items-center justify-center flex-shrink-0">
+                        <span className="text-[9px]">⏰</span>
+                      </div>
+                      {i < checkpoints.length - 1 && (
+                        <div className="w-px flex-1 bg-white/10 mt-1"></div>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-white font-medium text-sm mb-1">{cp.time}</div>
+                      <ul className="space-y-1">
+                        {cp.tasks.map((task, j) => (
+                          <li key={j} className="text-white/40 text-xs flex items-start gap-2">
+                            <span className="text-beige/50 mt-0.5">-</span>
+                            <span>{task}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+        </section>
+      );
+    }
+
+    // ========================================
+    // 📄 Section 4: Content Pipeline
+    // ========================================
+
+    function PipelineSection() {
+      const nodes = [
+        {
+          date: '4/20 월', highlight: true, label: '현재',
+          title: '카드뉴스: "알아차렸는데 왜 또 반응했을까"',
+          sub: '스토리 5장 시퀀스',
+          role: '🔥 공감 → 저장/댓글 폭발',
+          keyword: '공감',
+        },
+        {
+          date: '4/22 수', highlight: false,
+          title: '릴스: 같은 주제 영상 버전',
+          sub: '카드뉴스 반응 데이터 활용',
+          role: '🚀 도달 확장 (릴스 알고리즘)',
+          keyword: '확산',
+        },
+        {
+          date: '4/23 목', highlight: false,
+          title: '리트릿 예고 사진+캡션',
+          sub: '"이런 순간이 쌓여서 리트릿을 열게 됐어요"',
+          role: '🎯 리트릿 대기자 유입 시작',
+          keyword: '예고',
+        },
+        {
+          date: '4/25 금', highlight: false,
+          title: 'ESSAY: "왜 오프라인이어야 하냐고요?"',
+          sub: '',
+          role: '💡 오프라인 가치 설득',
+          keyword: '설득',
+        },
+        {
+          date: '4/28 월', highlight: false,
+          title: '사진+캡션: 리트릿 타겟 페르소나',
+          sub: '',
+          role: '🎯 "이 사람 내 얘기" 타겟팅',
+          keyword: '타겟',
+        },
+        {
+          date: '4/30 수', highlight: false,
+          title: 'RETREAT 모집 카드뉴스 6장',
+          sub: '',
+          role: '📢 정식 모집 오픈',
+          keyword: '모집',
+        },
+      ];
+
+      return (
+        <section>
+          <SectionTitle icon="🗓️" title="이번 주 콘텐츠 파이프라인" id="pipeline" />
+          <Card>
+            {/* Horizontal Timeline */}
+            <div className="relative py-8">
+              {/* Connection line */}
+              <div className="pipeline-line"></div>
+
+              <div className="relative flex justify-between">
+                {nodes.map((node, i) => (
+                  <div key={i} className="relative flex flex-col items-center" style={{ width: `${100 / nodes.length}%` }}>
+                    {/* Date label */}
+                    <div className={`text-xs font-semibold mb-3 ${node.highlight ? 'text-beige' : 'text-white/40'}`}>
+                      {node.date} {node.highlight && '★'}
+                    </div>
+
+                    {/* Node circle */}
+                    <div className={`relative z-10 w-6 h-6 rounded-full border-2 ${
+                      node.highlight
+                        ? 'bg-beige border-beige shadow-[0_0_12px_rgba(200,184,154,0.4)]'
+                        : 'bg-card border-white/20'
+                    }`}></div>
+
+                    {/* Content card below */}
+                    <div className={`mt-4 text-center px-1 ${node.highlight ? '' : ''}`}>
+                      <div className={`text-xs leading-relaxed mb-1 ${node.highlight ? 'text-white font-medium' : 'text-white/60'}`}>
+                        {node.title}
+                      </div>
+                      {node.sub && (
+                        <div className="text-[10px] text-white/30 mb-1">{node.sub}</div>
+                      )}
+                      <div className={`text-[10px] mt-1 ${node.highlight ? 'text-beige' : 'text-beige/50'}`}>
+                        {node.role}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Strategy summary */}
+            <div className="mt-6 pt-6 border-t border-white/5 text-center">
+              <div className="flex items-center justify-center gap-2 text-sm mb-3 flex-wrap">
+                {nodes.map((node, i) => (
+                  <React.Fragment key={i}>
+                    <span className={`${i === 0 ? 'text-beige font-semibold' : 'text-white/50'}`}>
+                      {node.keyword}({node.date.split(' ')[0]})
+                    </span>
+                    {i < nodes.length - 1 && <span className="text-white/20">→</span>}
+                  </React.Fragment>
+                ))}
+              </div>
+              <p className="text-white/30 text-xs">
+                모든 콘텐츠가 리트릿 모집이라는 하나의 목표를 향해 흐릅니다.
+              </p>
+            </div>
+          </Card>
+        </section>
+      );
+    }
+
+    // ========================================
+    // 📄 Section 5: Strategy Memo
+    // ========================================
+
+    function StrategySection() {
+      const cards = [
+        {
+          icon: '🔄',
+          title: '원소스 멀티유즈',
+          items: [
+            '카드뉴스 1개 → 릴스 + 스토리 + 댓글 콘텐츠',
+            '하나의 메시지를 3개 포맷으로 반복 노출',
+            "반복이 아닌 '심화'로 느끼게 하기",
+          ]
+        },
+        {
+          icon: '📈',
+          title: '참여 → 전환 퍼널',
+          items: [
+            '댓글/투표(참여) → 프로필 방문 → 팔로우',
+            '팔로우 → PDF 다운 → 이메일 리스트',
+            '이메일 → 리트릿 모집 안내 → 결제',
+          ]
+        },
+        {
+          icon: '🎯',
+          title: '이번 주 원 메시지',
+          items: [
+            '"알아차림은 틈을 만드는 것"',
+            '카드뉴스, 릴스, 스토리 전부 이 메시지',
+            '리트릿 = "그 틈을 경험하는 하루"로 연결',
+          ]
+        },
+      ];
+
+      return (
+        <section className="pb-20">
+          <SectionTitle icon="💡" title="핵심 전략 메모" id="strategy" />
+          <div className="grid grid-cols-3 gap-6">
+            {cards.map((card, i) => (
+              <Card key={i} className="hover:border-beige/20 transition-colors">
+                <div className="text-2xl mb-3">{card.icon}</div>
+                <h3 className="text-white font-semibold text-lg mb-4">{card.title}</h3>
+                <ul className="space-y-3">
+                  {card.items.map((item, j) => (
+                    <li key={j} className="flex items-start gap-2 text-sm">
+                      <span className="text-beige mt-1 flex-shrink-0">
+                        <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor"><circle cx="4" cy="4" r="3"/></svg>
+                      </span>
+                      <span className="text-white/60">{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            ))}
+          </div>
+        </section>
+      );
+    }
+
+    // ========================================
+    // 🚀 App Component
+    // ========================================
+
+    function App() {
+      return (
+        <div className="min-h-screen bg-dark text-white">
+          <NavBar />
+          <main className="max-w-[1200px] mx-auto px-6">
+            <Header />
+            <div className="space-y-12">
+              <ReelsSection />
+              <StorySection />
+              <AnalyticsSection />
+              <PipelineSection />
+              <StrategySection />
+            </div>
+          </main>
+          <footer className="border-t border-white/5 py-6 text-center text-white/20 text-xs">
+            @the.noting_ Content Strategy Dashboard — 2026.04.20
+          </footer>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Rendering
+    // ========================================
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
