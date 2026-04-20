@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>자취요리 토론장</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in {
+      animation: fadeIn 0.25s ease-out;
+    }
+    @keyframes slideDown {
+      from { opacity: 0; max-height: 0; }
+      to { opacity: 1; max-height: 600px; }
+    }
+    .animate-slide-down {
+      animation: slideDown 0.3s ease-out;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useCallback, useMemo, createContext, useContext, useRef } = React;
+
+    // ========================================
+    // Design System Components
+    // ========================================
+
+    function Button({ children, variant = 'primary', size = 'md', disabled = false, onClick, className = '', type = 'button' }) {
+      const base = 'inline-flex items-center justify-center font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer';
+      const variants = {
+        primary: 'bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-indigo-500 shadow-sm',
+        secondary: 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 focus:ring-indigo-500',
+        danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 shadow-sm',
+        ghost: 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 focus:ring-gray-500',
+      };
+      const sizes = {
+        sm: 'px-3 py-1.5 text-sm',
+        md: 'px-4 py-2 text-sm',
+        lg: 'px-6 py-3 text-base',
+      };
+      return (
+        <button
+          type={type}
+          className={`${base} ${variants[variant]} ${sizes[size]} ${className}`}
+          disabled={disabled}
+          onClick={onClick}
+        >
+          {children}
+        </button>
+      );
+    }
+
+    function Input({ label, value, onChange, placeholder, error, disabled, className = '', type = 'text', id }) {
+      return (
+        <div className={className}>
+          {label && <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1">{label}</label>}
+          <input
+            id={id}
+            type={type}
+            value={value}
+            onChange={onChange}
+            placeholder={placeholder}
+            disabled={disabled}
+            className={`w-full px-3 py-2 border rounded-lg text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${error ? 'border-red-400' : 'border-gray-300'} ${disabled ? 'bg-gray-100' : 'bg-white'}`}
+          />
+          {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
+        </div>
+      );
+    }
+
+    function Textarea({ label, value, onChange, placeholder, error, disabled, rows = 5, className = '', id }) {
+      return (
+        <div className={className}>
+          {label && <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1">{label}</label>}
+          <textarea
+            id={id}
+            value={value}
+            onChange={onChange}
+            placeholder={placeholder}
+            disabled={disabled}
+            rows={rows}
+            className={`w-full px-3 py-2 border rounded-lg text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-vertical ${error ? 'border-red-400' : 'border-gray-300'} ${disabled ? 'bg-gray-100' : 'bg-white'}`}
+          />
+          {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
+        </div>
+      );
+    }
+
+    function Card({ children, className = '' }) {
+      return (
+        <div className={`bg-white rounded-xl shadow-sm border border-gray-100 ${className}`}>
+          {children}
+        </div>
+      );
+    }
+
+    function Modal({ isOpen, onClose, title, children, size = 'md' }) {
+      const sizes = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl' };
+      if (!isOpen) return null;
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={title}>
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+          <div className={`relative bg-white rounded-2xl shadow-xl w-full ${sizes[size]} animate-fade-in`}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+              <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors" aria-label="닫기">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="px-6 py-4">{children}</div>
+          </div>
+        </div>
+      );
+    }
+
+    function Badge({ children, color = 'gray', className = '' }) {
+      const colors = {
+        gray: 'bg-gray-100 text-gray-700',
+        indigo: 'bg-indigo-100 text-indigo-700',
+        green: 'bg-green-100 text-green-700',
+      };
+      return (
+        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${colors[color]} ${className}`}>
+          {children}
+        </span>
+      );
+    }
+
+    // ========================================
+    // Auth Context (JWT)
+    // ========================================
+
+    const AuthContext = createContext(null);
+
+    function getAuthHeaders() {
+      const token = localStorage.getItem('community_token');
+      return token ? { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
+    }
+
+    function AuthProvider({ children }) {
+      const [user, setUser] = useState(null);
+      const [authLoading, setAuthLoading] = useState(true);
+
+      // 앱 시작 시 저장된 토큰으로 자동 로그인
+      useEffect(() => {
+        const token = localStorage.getItem('community_token');
+        if (!token) { setAuthLoading(false); return; }
+        fetch('/api/auth/me', { headers: { 'Authorization': `Bearer ${token}` } })
+          .then(r => r.json())
+          .then(json => {
+            if (json.success) setUser(json.data.user);
+            else { localStorage.removeItem('community_token'); localStorage.removeItem('community_user'); }
+          })
+          .catch(() => { localStorage.removeItem('community_token'); localStorage.removeItem('community_user'); })
+          .finally(() => setAuthLoading(false));
+      }, []);
+
+      const login = useCallback(async (email, password) => {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+        const json = await res.json();
+        if (!json.success) throw new Error(json.message);
+        localStorage.setItem('community_token', json.data.token);
+        localStorage.setItem('community_user', JSON.stringify(json.data.user));
+        setUser(json.data.user);
+        return json.data.user;
+      }, []);
+
+      const register = useCallback(async (email, password, nickname) => {
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, nickname }),
+        });
+        const json = await res.json();
+        if (!json.success) throw new Error(json.message);
+        localStorage.setItem('community_token', json.data.token);
+        localStorage.setItem('community_user', JSON.stringify(json.data.user));
+        setUser(json.data.user);
+        return json.data.user;
+      }, []);
+
+      const logout = useCallback(() => {
+        setUser(null);
+        localStorage.removeItem('community_token');
+        localStorage.removeItem('community_user');
+      }, []);
+
+      return (
+        <AuthContext.Provider value={{ user, authLoading, login, register, logout }}>
+          {children}
+        </AuthContext.Provider>
+      );
+    }
+
+    function useAuth() {
+      return useContext(AuthContext);
+    }
+
+    // ========================================
+    // Posts Hook (Server API CRUD)
+    // ========================================
+
+    function usePosts() {
+      const [posts, setPosts] = useState([]);
+      const [loading, setLoading] = useState(true);
+
+      const fetchPosts = useCallback(async () => {
+        try {
+          const res = await fetch('/api/posts', { headers: getAuthHeaders() });
+          const json = await res.json();
+          if (json.success) setPosts(json.data);
+        } catch (err) {
+          console.error('Failed to fetch posts:', err);
+        } finally {
+          setLoading(false);
+        }
+      }, []);
+
+      useEffect(() => {
+        fetchPosts();
+      }, [fetchPosts]);
+
+      const addPost = useCallback(async (title, content) => {
+        try {
+          const res = await fetch('/api/posts', {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ title, content }),
+          });
+          const json = await res.json();
+          if (json.success) {
+            setPosts(prev => [json.data, ...prev]);
+          }
+        } catch (err) {
+          console.error('Failed to create post:', err);
+        }
+      }, []);
+
+      const updatePost = useCallback(async (id, title, content) => {
+        try {
+          const res = await fetch(`/api/posts/${id}`, {
+            method: 'PUT',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ title, content }),
+          });
+          const json = await res.json();
+          if (json.success) {
+            setPosts(prev => prev.map(p => p.id === id ? json.data : p));
+          }
+        } catch (err) {
+          console.error('Failed to update post:', err);
+        }
+      }, []);
+
+      const deletePost = useCallback(async (id) => {
+        try {
+          const res = await fetch(`/api/posts/${id}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders(),
+          });
+          const json = await res.json();
+          if (json.success) {
+            setPosts(prev => prev.filter(p => p.id !== id));
+          }
+        } catch (err) {
+          console.error('Failed to delete post:', err);
+        }
+      }, []);
+
+      return { posts, loading, addPost, updatePost, deletePost };
+    }
+
+    // ========================================
+    // Date Formatting Utility
+    // ========================================
+
+    function formatDate(isoString) {
+      const d = new Date(isoString);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      return `${year}.${month}.${day} ${hours}:${minutes}`;
+    }
+
+    // ========================================
+    // Login Screen
+    // ========================================
+
+    function LoginScreen() {
+      const { login, register } = useAuth();
+      const [tab, setTab] = useState('login'); // 'login' | 'register'
+      const [email, setEmail] = useState('');
+      const [password, setPassword] = useState('');
+      const [nickname, setNickname] = useState('');
+      const [error, setError] = useState('');
+      const [submitting, setSubmitting] = useState(false);
+      const emailRef = useRef(null);
+
+      useEffect(() => {
+        emailRef.current?.focus();
+      }, [tab]);
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError('');
+        if (!email.trim() || !password) {
+          setError('이메일과 비밀번호를 입력해주세요.');
+          return;
+        }
+        if (tab === 'register' && !nickname.trim()) {
+          setError('닉네임을 입력해주세요.');
+          return;
+        }
+        if (password.length < 4) {
+          setError('비밀번호는 4자 이상이어야 합니다.');
+          return;
+        }
+        setSubmitting(true);
+        try {
+          if (tab === 'login') {
+            await login(email.trim(), password);
+          } else {
+            await register(email.trim(), password, nickname.trim());
+          }
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setSubmitting(false);
+        }
+      };
+
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 via-white to-purple-50 px-4">
+          <Card className="w-full max-w-md animate-fade-in">
+            <div className="p-8">
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-orange-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <span className="text-3xl">🍳</span>
+                </div>
+                <h1 className="text-2xl font-bold text-gray-900">자취요리 토론장</h1>
+              </div>
+              {/* 탭 */}
+              <div className="flex mb-6 bg-gray-100 rounded-lg p-1">
+                <button
+                  type="button"
+                  onClick={() => { setTab('login'); setError(''); }}
+                  className={`flex-1 py-2 text-sm font-medium rounded-md transition-all cursor-pointer ${tab === 'login' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  로그인
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setTab('register'); setError(''); }}
+                  className={`flex-1 py-2 text-sm font-medium rounded-md transition-all cursor-pointer ${tab === 'register' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  회원가입
+                </button>
+              </div>
+              <form onSubmit={handleSubmit} className="space-y-3">
+                {tab === 'register' && (
+                  <input
+                    type="text"
+                    value={nickname}
+                    onChange={(e) => { setNickname(e.target.value); setError(''); }}
+                    placeholder="닉네임"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                )}
+                <input
+                  ref={emailRef}
+                  type="email"
+                  value={email}
+                  onChange={(e) => { setEmail(e.target.value); setError(''); }}
+                  placeholder="이메일"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => { setPassword(e.target.value); setError(''); }}
+                  placeholder="비밀번호"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                />
+                {error && <p className="text-xs text-red-500">{error}</p>}
+                <Button type="submit" size="lg" className="w-full" disabled={submitting}>
+                  {submitting ? '처리 중...' : tab === 'login' ? '로그인' : '회원가입'}
+                </Button>
+              </form>
+            </div>
+          </Card>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Header Component
+    // ========================================
+
+    function Header({ postCount }) {
+      const { user, logout } = useAuth();
+
+      return (
+        <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6">
+            <div className="flex items-center justify-between h-16">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-orange-500 rounded-xl flex items-center justify-center">
+                  <span className="text-lg">🍳</span>
+                </div>
+                <h1 className="text-lg font-bold text-gray-900">자취요리 토론장</h1>
+                <Badge color="indigo">{postCount}개의 글</Badge>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="hidden sm:flex items-center gap-2 text-sm text-gray-600">
+                  <div className="w-7 h-7 bg-indigo-100 rounded-full flex items-center justify-center">
+                    <span className="text-xs font-bold text-indigo-600">{user.nickname[0].toUpperCase()}</span>
+                  </div>
+                  <span className="font-medium">{user.nickname}</span>
+                </div>
+                <Button variant="ghost" size="sm" onClick={logout}>
+                  로그아웃
+                </Button>
+              </div>
+            </div>
+          </div>
+        </header>
+      );
+    }
+
+    // ========================================
+    // Post Form Component
+    // ========================================
+
+    function PostForm({ onSubmit, onCancel, initialTitle = '', initialContent = '', submitLabel = '등록' }) {
+      const [title, setTitle] = useState(initialTitle);
+      const [content, setContent] = useState(initialContent);
+      const [errors, setErrors] = useState({});
+      const titleRef = useRef(null);
+
+      useEffect(() => {
+        titleRef.current?.focus();
+      }, []);
+
+      const validate = () => {
+        const e = {};
+        if (!title.trim()) e.title = '제목을 입력해주세요.';
+        if (!content.trim()) e.content = '내용을 입력해주세요.';
+        setErrors(e);
+        return Object.keys(e).length === 0;
+      };
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        if (validate()) {
+          onSubmit(title.trim(), content.trim());
+        }
+      };
+
+      return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label htmlFor="post-title" className="block text-sm font-medium text-gray-700 mb-1">제목</label>
+            <input
+              ref={titleRef}
+              id="post-title"
+              type="text"
+              value={title}
+              onChange={(e) => { setTitle(e.target.value); if (errors.title) setErrors(prev => ({ ...prev, title: '' })); }}
+              placeholder="게시글 제목을 입력하세요"
+              className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${errors.title ? 'border-red-400' : 'border-gray-300'}`}
+            />
+            {errors.title && <p className="mt-1 text-xs text-red-500">{errors.title}</p>}
+          </div>
+          <div>
+            <label htmlFor="post-content" className="block text-sm font-medium text-gray-700 mb-1">내용</label>
+            <textarea
+              id="post-content"
+              value={content}
+              onChange={(e) => { setContent(e.target.value); if (errors.content) setErrors(prev => ({ ...prev, content: '' })); }}
+              placeholder="게시글 내용을 입력하세요"
+              rows={6}
+              className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-vertical ${errors.content ? 'border-red-400' : 'border-gray-300'}`}
+            />
+            {errors.content && <p className="mt-1 text-xs text-red-500">{errors.content}</p>}
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            {onCancel && (
+              <Button variant="secondary" onClick={onCancel}>취소</Button>
+            )}
+            <Button type="submit">{submitLabel}</Button>
+          </div>
+        </form>
+      );
+    }
+
+    // ========================================
+    // Delete Confirmation Modal
+    // ========================================
+
+    function DeleteConfirmModal({ isOpen, onClose, onConfirm, postTitle }) {
+      return (
+        <Modal isOpen={isOpen} onClose={onClose} title="게시글 삭제" size="sm">
+          <div className="text-sm text-gray-600 mb-1">
+            다음 게시글을 정말 삭제하시겠습니까?
+          </div>
+          <div className="bg-red-50 border border-red-100 rounded-lg p-3 mb-6">
+            <p className="text-sm font-medium text-red-800 truncate">{postTitle}</p>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={onClose}>취소</Button>
+            <Button variant="danger" onClick={onConfirm}>삭제</Button>
+          </div>
+        </Modal>
+      );
+    }
+
+    // ========================================
+    // Post List Item (목록 행)
+    // ========================================
+
+    function PostListItem({ post, onClick }) {
+      return (
+        <button
+          onClick={() => onClick(post)}
+          className="w-full text-left px-4 sm:px-5 py-3.5 flex items-center gap-3 hover:bg-indigo-50/50 transition-colors border-b border-gray-100 last:border-b-0 cursor-pointer"
+        >
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-semibold text-gray-900 truncate">{post.title}</h3>
+          </div>
+          <div className="flex items-center gap-3 flex-shrink-0 text-xs text-gray-400">
+            <span className="hidden sm:inline font-medium text-gray-500">{post.author}</span>
+            <div className="sm:hidden w-5 h-5 bg-gray-100 rounded-full flex items-center justify-center">
+              <span className="text-[9px] font-bold text-gray-500">{post.author[0].toUpperCase()}</span>
+            </div>
+            <span className="whitespace-nowrap">{formatDate(post.created_at)}</span>
+          </div>
+        </button>
+      );
+    }
+
+    // ========================================
+    // Comments Hook
+    // ========================================
+
+    function useComments(postId) {
+      const [comments, setComments] = useState([]);
+      const [loading, setLoading] = useState(true);
+
+      const fetchComments = useCallback(async () => {
+        if (!postId) return;
+        try {
+          const res = await fetch(`/api/posts/${postId}/comments`, { headers: getAuthHeaders() });
+          const json = await res.json();
+          if (json.success) setComments(json.data);
+        } catch (err) {
+          console.error('Failed to fetch comments:', err);
+        } finally {
+          setLoading(false);
+        }
+      }, [postId]);
+
+      useEffect(() => {
+        setLoading(true);
+        fetchComments();
+      }, [fetchComments]);
+
+      const addComment = useCallback(async (content) => {
+        try {
+          const res = await fetch(`/api/posts/${postId}/comments`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ content }),
+          });
+          const json = await res.json();
+          if (json.success) setComments(prev => [...prev, json.data]);
+        } catch (err) {
+          console.error('Failed to add comment:', err);
+        }
+      }, [postId]);
+
+      const deleteComment = useCallback(async (commentId) => {
+        try {
+          const res = await fetch(`/api/comments/${commentId}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders(),
+          });
+          const json = await res.json();
+          if (json.success) setComments(prev => prev.filter(c => c.id !== commentId));
+        } catch (err) {
+          console.error('Failed to delete comment:', err);
+        }
+      }, []);
+
+      return { comments, loading, addComment, deleteComment };
+    }
+
+    // ========================================
+    // Comment Section Component
+    // ========================================
+
+    function CommentSection({ postId }) {
+      const { user } = useAuth();
+      const { comments, loading, addComment, deleteComment } = useComments(postId);
+      const [text, setText] = useState('');
+      const [submitting, setSubmitting] = useState(false);
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!text.trim()) return;
+        setSubmitting(true);
+        await addComment(text.trim());
+        setText('');
+        setSubmitting(false);
+      };
+
+      return (
+        <Card className="mt-4">
+          <div className="p-5 sm:p-6">
+            <h3 className="text-sm font-semibold text-gray-900 mb-4">
+              댓글 {!loading && <span className="text-gray-400 font-normal">({comments.length})</span>}
+            </h3>
+
+            {/* 댓글 입력 */}
+            <form onSubmit={handleSubmit} className="flex gap-2 mb-5">
+              <input
+                type="text"
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder="댓글을 입력하세요..."
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                disabled={submitting}
+              />
+              <Button type="submit" size="sm" disabled={submitting || !text.trim()}>
+                등록
+              </Button>
+            </form>
+
+            {/* 댓글 목록 */}
+            {loading ? (
+              <div className="text-center py-4 text-gray-400 text-sm">불러오는 중...</div>
+            ) : comments.length === 0 ? (
+              <div className="text-center py-4 text-gray-400 text-sm">아직 댓글이 없습니다. 첫 댓글을 남겨보세요!</div>
+            ) : (
+              <div className="space-y-3">
+                {comments.map(c => (
+                  <div key={c.id} className="flex gap-2.5 animate-fade-in">
+                    <div className="w-7 h-7 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <span className="text-[10px] font-bold text-gray-500">{c.author[0].toUpperCase()}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-gray-700">{c.author}</span>
+                        <span className="text-xs text-gray-400">{formatDate(c.created_at)}</span>
+                        {user.id === c.author_id && (
+                          <button
+                            onClick={() => deleteComment(c.id)}
+                            className="text-xs text-gray-300 hover:text-red-500 transition-colors cursor-pointer"
+                          >
+                            삭제
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-600 mt-0.5 break-words">{c.content}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
+      );
+    }
+
+    // ========================================
+    // Post Detail (상세 보기)
+    // ========================================
+
+    function PostDetail({ post, isOwner, onBack, onEdit, onDelete }) {
+      return (
+        <div className="animate-fade-in">
+          {/* 뒤로가기 */}
+          <button
+            onClick={onBack}
+            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-indigo-600 mb-4 transition-colors cursor-pointer"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+            </svg>
+            목록으로
+          </button>
+
+          <Card>
+            <div className="p-5 sm:p-8">
+              {/* 헤더 */}
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <h2 className="text-xl sm:text-2xl font-bold text-gray-900 leading-snug break-words min-w-0 flex-1">
+                  {post.title}
+                </h2>
+                {isOwner && (
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      onClick={() => onEdit(post)}
+                      className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                      title="수정"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => onDelete(post)}
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="삭제"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* 작성자 정보 */}
+              <div className="flex items-center gap-2 text-sm text-gray-500 pb-4 mb-5 border-b border-gray-100">
+                <div className="w-7 h-7 bg-indigo-100 rounded-full flex items-center justify-center">
+                  <span className="text-xs font-bold text-indigo-600">{post.author[0].toUpperCase()}</span>
+                </div>
+                <span className="font-medium text-gray-700">{post.author}</span>
+                <span className="text-gray-300">|</span>
+                <span>{formatDate(post.created_at)}</span>
+                {post.updated_at && <span className="text-gray-300">(수정됨)</span>}
+              </div>
+
+              {/* 본문 */}
+              <div className="text-sm sm:text-base text-gray-700 leading-relaxed whitespace-pre-wrap break-words min-h-[120px]">
+                {post.content}
+              </div>
+            </div>
+          </Card>
+
+          {/* 댓글 */}
+          <CommentSection postId={post.id} />
+        </div>
+      );
+    }
+
+    // ========================================
+    // Empty State Component
+    // ========================================
+
+    function EmptyState() {
+      return (
+        <div className="text-center py-16 px-4">
+          <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-10 h-10 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-semibold text-gray-500 mb-1">아직 게시글이 없습니다</h3>
+          <p className="text-sm text-gray-400">첫 번째 글을 작성해보세요!</p>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Main Board Page
+    // ========================================
+
+    function BoardPage() {
+      const { user } = useAuth();
+      const { posts, loading, addPost, updatePost, deletePost } = usePosts();
+      const [showWriteForm, setShowWriteForm] = useState(false);
+      const [selectedPost, setSelectedPost] = useState(null);
+      const [editingPost, setEditingPost] = useState(null);
+      const [deletingPost, setDeletingPost] = useState(null);
+
+      // 선택된 게시글이 수정/삭제 후 posts에서 최신 데이터 반영
+      const currentPost = selectedPost ? posts.find(p => p.id === selectedPost.id) : null;
+
+      const handleCreate = async (title, content) => {
+        await addPost(title, content);
+        setShowWriteForm(false);
+      };
+
+      const handleUpdate = async (title, content) => {
+        await updatePost(editingPost.id, title, content);
+        setEditingPost(null);
+      };
+
+      const handleDelete = async () => {
+        const id = deletingPost.id;
+        await deletePost(id);
+        setDeletingPost(null);
+        // 상세 보기 중 삭제한 경우 목록으로 돌아감
+        if (selectedPost && selectedPost.id === id) setSelectedPost(null);
+      };
+
+      return (
+        <div className="min-h-screen bg-gray-50">
+          <Header postCount={posts.length} />
+
+          <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
+            {/* 상세 보기 */}
+            {currentPost ? (
+              <PostDetail
+                post={currentPost}
+                isOwner={user.id === currentPost.author_id}
+                onBack={() => setSelectedPost(null)}
+                onEdit={setEditingPost}
+                onDelete={setDeletingPost}
+              />
+            ) : (
+              <>
+                {/* 글쓰기 버튼 / 폼 */}
+                <div className="mb-6">
+                  {!showWriteForm ? (
+                    <Button onClick={() => setShowWriteForm(true)} size="md" className="gap-2">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                      </svg>
+                      글쓰기
+                    </Button>
+                  ) : (
+                    <Card className="animate-slide-down">
+                      <div className="p-5 sm:p-6">
+                        <h2 className="text-lg font-semibold text-gray-900 mb-4">새 글 작성</h2>
+                        <PostForm
+                          onSubmit={handleCreate}
+                          onCancel={() => setShowWriteForm(false)}
+                          submitLabel="등록"
+                        />
+                      </div>
+                    </Card>
+                  )}
+                </div>
+
+                {/* 게시글 목록 테이블 */}
+                {loading ? (
+                  <div className="text-center py-16 text-gray-400">불러오는 중...</div>
+                ) : posts.length === 0 ? (
+                  <EmptyState />
+                ) : (
+                  <Card>
+                    {/* 테이블 헤더 */}
+                    <div className="px-4 sm:px-5 py-2.5 flex items-center gap-3 text-xs font-medium text-gray-400 uppercase tracking-wider border-b border-gray-200 bg-gray-50/50 rounded-t-xl">
+                      <div className="flex-1">제목</div>
+                      <div className="w-20 text-center hidden sm:block">작성자</div>
+                      <div className="w-32 text-right">작성일</div>
+                    </div>
+                    {posts.map(post => (
+                      <PostListItem
+                        key={post.id}
+                        post={post}
+                        onClick={setSelectedPost}
+                      />
+                    ))}
+                  </Card>
+                )}
+              </>
+            )}
+          </main>
+
+          {/* Edit Modal */}
+          <Modal isOpen={!!editingPost} onClose={() => setEditingPost(null)} title="게시글 수정" size="md">
+            {editingPost && (
+              <PostForm
+                onSubmit={handleUpdate}
+                onCancel={() => setEditingPost(null)}
+                initialTitle={editingPost.title}
+                initialContent={editingPost.content}
+                submitLabel="수정"
+              />
+            )}
+          </Modal>
+
+          {/* Delete Confirmation */}
+          <DeleteConfirmModal
+            isOpen={!!deletingPost}
+            onClose={() => setDeletingPost(null)}
+            onConfirm={handleDelete}
+            postTitle={deletingPost?.title || ''}
+          />
+        </div>
+      );
+    }
+
+    // ========================================
+    // App Component
+    // ========================================
+
+    function App() {
+      const { user, authLoading } = useAuth();
+      if (authLoading) return <div className="min-h-screen flex items-center justify-center text-gray-400">로딩 중...</div>;
+      return user ? <BoardPage /> : <LoginScreen />;
+    }
+
+    // ========================================
+    // Rendering
+    // ========================================
+
+    ReactDOM.createRoot(document.getElementById('root')).render(
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    );
+  </script>
+</body>
+</html>
