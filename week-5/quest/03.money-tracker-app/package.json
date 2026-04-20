@@ -1,0 +1,14 @@
+{
+  "name": "money-tracker-app",
+  "version": "1.0.0",
+  "description": "Money Tracker (가계부) with PostgreSQL backend",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "pg": "^8.13.3"
+  }
+}
