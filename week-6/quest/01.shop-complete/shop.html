@@ -1,0 +1,1178 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>자취마켓 - 자취생을 위한 마켓</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://js.tosspayments.com/v2/standard"></script>
+  <style>
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes slideOut {
+      from { transform: translateX(0); opacity: 1; }
+      to { transform: translateX(100%); opacity: 0; }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .toast-enter { animation: slideIn 0.3s ease-out forwards; }
+    .toast-exit { animation: slideOut 0.3s ease-in forwards; }
+    .fade-in { animation: fadeIn 0.3s ease-out forwards; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useCallback, useMemo, createContext, useContext, useRef } = React;
+
+    // ========================================
+    // API Helper
+    // ========================================
+    function getAuthHeaders() {
+      const token = localStorage.getItem('jachi_token');
+      return token
+        ? { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+        : { 'Content-Type': 'application/json' };
+    }
+
+    // ========================================
+    // Products Hook
+    // ========================================
+    function useProducts() {
+      const [products, setProducts] = useState([]);
+      const [loading, setLoading] = useState(true);
+
+      useEffect(() => {
+        fetch('/api/products')
+          .then(r => r.json())
+          .then(json => { if (json.success) setProducts(json.data); })
+          .catch(err => console.error('Failed to fetch products:', err))
+          .finally(() => setLoading(false));
+      }, []);
+
+      return { products, loading };
+    }
+
+    // ========================================
+    // Auth Context
+    // ========================================
+    const AuthContext = createContext(null);
+
+    function AuthProvider({ children }) {
+      const [user, setUser] = useState(null);
+      const [authLoading, setAuthLoading] = useState(true);
+
+      useEffect(() => {
+        const token = localStorage.getItem('jachi_token');
+        if (!token) { setAuthLoading(false); return; }
+        fetch('/api/auth/me', { headers: { 'Authorization': `Bearer ${token}` } })
+          .then(r => r.json())
+          .then(json => {
+            if (json.success) setUser(json.data.user);
+            else { localStorage.removeItem('jachi_token'); }
+          })
+          .catch(() => { localStorage.removeItem('jachi_token'); })
+          .finally(() => setAuthLoading(false));
+      }, []);
+
+      const login = useCallback(async (email, password) => {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+        const json = await res.json();
+        if (!json.success) return { success: false, message: json.message };
+        localStorage.setItem('jachi_token', json.data.token);
+        setUser(json.data.user);
+        return { success: true };
+      }, []);
+
+      const register = useCallback(async (email, password, nickname) => {
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, nickname }),
+        });
+        const json = await res.json();
+        if (!json.success) return { success: false, message: json.message };
+        localStorage.setItem('jachi_token', json.data.token);
+        setUser(json.data.user);
+        return { success: true };
+      }, []);
+
+      const logout = useCallback(() => {
+        setUser(null);
+        localStorage.removeItem('jachi_token');
+      }, []);
+
+      return (
+        <AuthContext.Provider value={{ user, authLoading, login, register, logout }}>
+          {children}
+        </AuthContext.Provider>
+      );
+    }
+
+    function useAuth() {
+      return useContext(AuthContext);
+    }
+
+    // ========================================
+    // Cart Context
+    // ========================================
+    const CartContext = createContext(null);
+
+    function CartProvider({ children }) {
+      const { user } = useAuth();
+      const [items, setItems] = useState([]);
+
+      useEffect(() => {
+        if (!user) { setItems([]); return; }
+        fetch('/api/cart', { headers: getAuthHeaders() })
+          .then(r => r.json())
+          .then(json => { if (json.success) setItems(json.data); })
+          .catch(err => console.error('Failed to fetch cart:', err));
+      }, [user]);
+
+      const addItem = useCallback(async (product) => {
+        try {
+          const res = await fetch('/api/cart', {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ product_id: product.id }),
+          });
+          const json = await res.json();
+          if (json.success) {
+            setItems(prev => {
+              const existing = prev.find(i => i.product_id === json.data.product_id);
+              if (existing) return prev.map(i => i.product_id === json.data.product_id ? json.data : i);
+              return [...prev, json.data];
+            });
+          }
+        } catch (err) { console.error('Failed to add to cart:', err); }
+      }, []);
+
+      const removeItem = useCallback(async (productId) => {
+        try {
+          const res = await fetch(`/api/cart/${productId}`, { method: 'DELETE', headers: getAuthHeaders() });
+          const json = await res.json();
+          if (json.success) setItems(prev => prev.filter(i => i.product_id !== productId));
+        } catch (err) { console.error('Failed to remove from cart:', err); }
+      }, []);
+
+      const updateQuantity = useCallback(async (productId, quantity) => {
+        if (quantity < 1) return;
+        try {
+          const res = await fetch(`/api/cart/${productId}`, {
+            method: 'PUT',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ quantity }),
+          });
+          const json = await res.json();
+          if (json.success) {
+            setItems(prev => prev.map(i => i.product_id === productId ? { ...i, quantity } : i));
+          }
+        } catch (err) { console.error('Failed to update cart:', err); }
+      }, []);
+
+      const totalCount = useMemo(() => items.reduce((sum, item) => sum + item.quantity, 0), [items]);
+      const totalPrice = useMemo(() => items.reduce((sum, item) => sum + item.price * item.quantity, 0), [items]);
+
+      const clearCart = useCallback(async () => {
+        try {
+          const res = await fetch('/api/cart', { method: 'DELETE', headers: getAuthHeaders() });
+          const json = await res.json();
+          if (json.success) setItems([]);
+        } catch (err) { console.error('Failed to clear cart:', err); }
+      }, []);
+
+      return (
+        <CartContext.Provider value={{ items, addItem, removeItem, updateQuantity, totalCount, totalPrice, clearCart }}>
+          {children}
+        </CartContext.Provider>
+      );
+    }
+
+    function useCart() {
+      return useContext(CartContext);
+    }
+
+    // ========================================
+    // Toast Context
+    // ========================================
+    const ToastContext = createContext(null);
+
+    function ToastProvider({ children }) {
+      const [toasts, setToasts] = useState([]);
+      const idRef = useRef(0);
+
+      const addToast = useCallback((message, type = 'info') => {
+        const id = ++idRef.current;
+        setToasts(prev => [...prev, { id, message, type, exiting: false }]);
+        setTimeout(() => {
+          setToasts(prev => prev.map(t => t.id === id ? { ...t, exiting: true } : t));
+          setTimeout(() => {
+            setToasts(prev => prev.filter(t => t.id !== id));
+          }, 300);
+        }, 2500);
+      }, []);
+
+      return (
+        <ToastContext.Provider value={{ addToast }}>
+          {children}
+          <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
+            {toasts.map(toast => (
+              <div
+                key={toast.id}
+                className={`pointer-events-auto px-4 py-3 rounded-lg shadow-lg text-white text-sm font-medium ${
+                  toast.exiting ? 'toast-exit' : 'toast-enter'
+                } ${
+                  toast.type === 'success' ? 'bg-emerald-500' :
+                  toast.type === 'error' ? 'bg-red-500' :
+                  toast.type === 'warning' ? 'bg-amber-500' :
+                  'bg-blue-500'
+                }`}
+              >
+                {toast.message}
+              </div>
+            ))}
+          </div>
+        </ToastContext.Provider>
+      );
+    }
+
+    function useToast() {
+      return useContext(ToastContext);
+    }
+
+    // ========================================
+    // Design System Components
+    // ========================================
+    function Button({ children, variant = 'primary', size = 'md', disabled = false, onClick, className = '', ...props }) {
+      const base = 'inline-flex items-center justify-center font-semibold rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
+      const variants = {
+        primary: 'bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-indigo-500 active:bg-indigo-800',
+        secondary: 'bg-gray-100 text-gray-700 hover:bg-gray-200 focus:ring-gray-400 active:bg-gray-300',
+        danger: 'bg-red-500 text-white hover:bg-red-600 focus:ring-red-400 active:bg-red-700',
+        ghost: 'bg-transparent text-gray-600 hover:bg-gray-100 focus:ring-gray-300',
+        outline: 'border-2 border-indigo-600 text-indigo-600 hover:bg-indigo-50 focus:ring-indigo-500',
+      };
+      const sizes = {
+        sm: 'px-3 py-1.5 text-xs',
+        md: 'px-4 py-2 text-sm',
+        lg: 'px-6 py-3 text-base',
+      };
+      return (
+        <button
+          className={`${base} ${variants[variant]} ${sizes[size]} ${className}`}
+          disabled={disabled}
+          onClick={onClick}
+          {...props}
+        >
+          {children}
+        </button>
+      );
+    }
+
+    function Input({ label, type = 'text', value, onChange, placeholder, error, disabled = false, className = '' }) {
+      return (
+        <div className={`flex flex-col gap-1 ${className}`}>
+          {label && <label className="text-sm font-medium text-gray-700">{label}</label>}
+          <input
+            type={type}
+            value={value}
+            onChange={onChange}
+            placeholder={placeholder}
+            disabled={disabled}
+            className={`w-full px-3 py-2.5 border rounded-lg text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed ${
+              error ? 'border-red-400 focus:ring-red-500' : 'border-gray-300'
+            }`}
+          />
+          {error && <span className="text-xs text-red-500">{error}</span>}
+        </div>
+      );
+    }
+
+    function Badge({ children, color = 'indigo', className = '' }) {
+      const colors = {
+        indigo: 'bg-indigo-100 text-indigo-700',
+        red: 'bg-red-100 text-red-700',
+        green: 'bg-emerald-100 text-emerald-700',
+        gray: 'bg-gray-100 text-gray-600',
+      };
+      return (
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${colors[color]} ${className}`}>
+          {children}
+        </span>
+      );
+    }
+
+    function Modal({ isOpen, onClose, title, children, size = 'md' }) {
+      if (!isOpen) return null;
+      const sizes = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-lg', xl: 'max-w-xl' };
+      return (
+        <div className="fixed inset-0 z-40 flex items-center justify-center p-4" onClick={onClose}>
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" />
+          <div
+            className={`relative bg-white rounded-2xl shadow-2xl w-full ${sizes[size]} fade-in max-h-[90vh] overflow-y-auto`}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b">
+              <h2 className="text-lg font-bold text-gray-900">{title}</h2>
+              <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="px-6 py-4">{children}</div>
+          </div>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Price Formatter
+    // ========================================
+    function formatPrice(price) {
+      return price.toLocaleString('ko-KR') + '원';
+    }
+
+    // ========================================
+    // Header Component
+    // ========================================
+    function Header({ currentPage, setCurrentPage }) {
+      const { user, logout } = useAuth();
+      const { totalCount } = useCart();
+      const { addToast } = useToast();
+
+      return (
+        <header className="sticky top-0 z-30 bg-white border-b border-gray-200 shadow-sm">
+          <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+            <button
+              onClick={() => setCurrentPage('home')}
+              className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+            >
+              <span className="text-2xl">🏪</span>
+              <h1 className="text-xl font-extrabold text-indigo-600 tracking-tight">자취마켓</h1>
+            </button>
+
+            <div className="flex items-center gap-3">
+              <a
+                href="/admin"
+                className="hidden sm:inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-indigo-600 border border-gray-200 rounded-lg hover:border-indigo-300 transition-colors"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                관리자
+              </a>
+
+              <button
+                onClick={() => {
+                  if (!user) {
+                    addToast('로그인이 필요합니다', 'warning');
+                    setCurrentPage('auth');
+                    return;
+                  }
+                  setCurrentPage('cart');
+                }}
+                className="relative p-2 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
+                </svg>
+                {user && totalCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                    {totalCount > 99 ? '99+' : totalCount}
+                  </span>
+                )}
+              </button>
+
+              {user ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage('mypage')}
+                    className="hidden sm:inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-indigo-600 border border-gray-200 rounded-lg hover:border-indigo-300 transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    마이페이지
+                  </button>
+                  <span className="hidden md:inline text-sm text-gray-600 font-medium">
+                    {user.nickname}님
+                  </span>
+                  <Button variant="ghost" size="sm" onClick={() => { logout(); addToast('로그아웃 되었습니다', 'info'); setCurrentPage('home'); }}>
+                    로그아웃
+                  </Button>
+                </div>
+              ) : (
+                <Button variant="primary" size="sm" onClick={() => setCurrentPage('auth')}>
+                  로그인
+                </Button>
+              )}
+            </div>
+          </div>
+        </header>
+      );
+    }
+
+    // ========================================
+    // Auth Page
+    // ========================================
+    function AuthPage({ setCurrentPage }) {
+      const [tab, setTab] = useState('login');
+      const [email, setEmail] = useState('');
+      const [password, setPassword] = useState('');
+      const [nickname, setNickname] = useState('');
+      const [errors, setErrors] = useState({});
+      const { login, register } = useAuth();
+      const { addToast } = useToast();
+
+      const resetForm = () => { setEmail(''); setPassword(''); setNickname(''); setErrors({}); };
+
+      const handleLogin = async (e) => {
+        e.preventDefault();
+        const newErrors = {};
+        if (!email.trim()) newErrors.email = '이메일을 입력해주세요';
+        if (!password) newErrors.password = '비밀번호를 입력해주세요';
+        if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
+        const result = await login(email, password);
+        if (result.success) { addToast('로그인 되었습니다!', 'success'); setCurrentPage('home'); }
+        else { addToast(result.message, 'error'); }
+      };
+
+      const handleRegister = async (e) => {
+        e.preventDefault();
+        const newErrors = {};
+        if (!email.trim()) newErrors.email = '이메일을 입력해주세요';
+        else if (!/\S+@\S+\.\S+/.test(email)) newErrors.email = '올바른 이메일 형식이 아닙니다';
+        if (!password) newErrors.password = '비밀번호를 입력해주세요';
+        else if (password.length < 4) newErrors.password = '비밀번호는 4자 이상이어야 합니다';
+        if (!nickname.trim()) newErrors.nickname = '닉네임을 입력해주세요';
+        if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
+        const result = await register(email, password, nickname);
+        if (result.success) { addToast('회원가입이 완료되었습니다!', 'success'); setCurrentPage('home'); }
+        else { addToast(result.message, 'error'); }
+      };
+
+      return (
+        <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-lg overflow-hidden fade-in">
+            <div className="flex border-b">
+              <button onClick={() => { setTab('login'); resetForm(); }}
+                className={`flex-1 py-4 text-sm font-bold transition-colors ${tab === 'login' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/50' : 'text-gray-400 hover:text-gray-600'}`}>
+                로그인
+              </button>
+              <button onClick={() => { setTab('register'); resetForm(); }}
+                className={`flex-1 py-4 text-sm font-bold transition-colors ${tab === 'register' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/50' : 'text-gray-400 hover:text-gray-600'}`}>
+                회원가입
+              </button>
+            </div>
+            <form onSubmit={tab === 'login' ? handleLogin : handleRegister} className="p-6 flex flex-col gap-4">
+              <div className="text-center mb-2">
+                <span className="text-4xl">🏪</span>
+                <p className="text-gray-500 text-sm mt-1">
+                  {tab === 'login' ? '자취마켓에 오신 것을 환영합니다' : '자취마켓 회원이 되어주세요'}
+                </p>
+              </div>
+              <Input label="이메일" type="email" value={email}
+                onChange={e => { setEmail(e.target.value); setErrors(prev => ({ ...prev, email: '' })); }}
+                placeholder="example@email.com" error={errors.email} />
+              <Input label="비밀번호" type="password" value={password}
+                onChange={e => { setPassword(e.target.value); setErrors(prev => ({ ...prev, password: '' })); }}
+                placeholder="비밀번호를 입력하세요" error={errors.password} />
+              {tab === 'register' && (
+                <Input label="닉네임" value={nickname}
+                  onChange={e => { setNickname(e.target.value); setErrors(prev => ({ ...prev, nickname: '' })); }}
+                  placeholder="사용할 닉네임" error={errors.nickname} />
+              )}
+              <Button variant="primary" size="lg" className="w-full mt-2">
+                {tab === 'login' ? '로그인' : '회원가입'}
+              </Button>
+            </form>
+          </div>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Product Card
+    // ========================================
+    function ProductCard({ product, onAddToCart }) {
+      const [imgLoaded, setImgLoaded] = useState(false);
+      const [imgError, setImgError] = useState(false);
+
+      return (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow duration-200 flex flex-col fade-in">
+          <div className="relative aspect-square bg-gray-100 overflow-hidden">
+            {!imgLoaded && !imgError && (
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+                <div className="w-8 h-8 border-3 border-gray-300 border-t-indigo-500 rounded-full animate-spin" />
+              </div>
+            )}
+            {imgError ? (
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+                <svg className="w-12 h-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+            ) : (
+              <img
+                src={product.image_url || `https://picsum.photos/seed/jachi-${product.id}/400/400`}
+                alt={product.name}
+                className={`w-full h-full object-cover transition-opacity duration-300 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
+                onLoad={() => setImgLoaded(true)}
+                onError={() => setImgError(true)}
+                loading="lazy"
+              />
+            )}
+            <Badge className="absolute top-2 left-2" color="indigo">{product.category}</Badge>
+          </div>
+          <div className="p-4 flex flex-col flex-1">
+            <h3 className="font-bold text-gray-900 text-sm sm:text-base leading-tight">{product.name}</h3>
+            <p className="text-xs text-gray-500 mt-1 flex-1">{product.description}</p>
+            <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
+              <span className="text-lg font-extrabold text-indigo-600">{formatPrice(product.price)}</span>
+              <Button variant="primary" size="sm" onClick={() => onAddToCart(product)}>
+                담기
+              </Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Home Page
+    // ========================================
+    function HomePage({ setCurrentPage }) {
+      const { user } = useAuth();
+      const { addItem } = useCart();
+      const { addToast } = useToast();
+      const { products, loading: productsLoading } = useProducts();
+      const [selectedCategory, setSelectedCategory] = useState('전체');
+
+      const categories = useMemo(() => ['전체', ...new Set(products.map(p => p.category).filter(Boolean))], [products]);
+
+      const filteredProducts = selectedCategory === '전체'
+        ? products
+        : products.filter(p => p.category === selectedCategory);
+
+      const handleAddToCart = (product) => {
+        if (!user) {
+          addToast('로그인이 필요합니다', 'warning');
+          setCurrentPage('auth');
+          return;
+        }
+        addItem(product);
+        addToast(`${product.name}을(를) 장바구니에 담았습니다`, 'success');
+      };
+
+      if (productsLoading) {
+        return (
+          <div className="flex items-center justify-center h-64">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="max-w-6xl mx-auto px-4 py-6">
+          <div className="mb-6">
+            <h2 className="text-2xl font-extrabold text-gray-900 mb-1">자취 필수 아이템</h2>
+            <p className="text-gray-500 text-sm">자취생활에 꼭 필요한 상품들을 모았습니다</p>
+          </div>
+
+          <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+            {categories.map(cat => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-all duration-200 ${
+                  selectedCategory === cat
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
+                    : 'bg-white text-gray-600 border border-gray-200 hover:border-indigo-300 hover:text-indigo-600'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {filteredProducts.map(product => (
+              <ProductCard
+                key={product.id}
+                product={product}
+                onAddToCart={handleAddToCart}
+              />
+            ))}
+          </div>
+
+          {filteredProducts.length === 0 && (
+            <div className="text-center py-20 text-gray-400">
+              <span className="text-5xl block mb-4">📦</span>
+              <p className="font-medium">해당 카테고리에 상품이 없습니다</p>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ========================================
+    // Cart Page
+    // ========================================
+    function CartPage({ setCurrentPage }) {
+      const { items, removeItem, updateQuantity, totalPrice } = useCart();
+      const { addToast } = useToast();
+
+      if (items.length === 0) {
+        return (
+          <div className="max-w-3xl mx-auto px-4 py-20 text-center fade-in">
+            <span className="text-6xl block mb-4">🛒</span>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">장바구니가 비어있습니다</h2>
+            <p className="text-gray-500 mb-6">마음에 드는 상품을 담아보세요!</p>
+            <Button variant="primary" size="lg" onClick={() => setCurrentPage('home')}>
+              쇼핑하러 가기
+            </Button>
+          </div>
+        );
+      }
+
+      return (
+        <div className="max-w-3xl mx-auto px-4 py-6 fade-in">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-extrabold text-gray-900">장바구니</h2>
+            <Badge color="indigo">{items.length}개 상품</Badge>
+          </div>
+
+          <div className="flex flex-col gap-3 mb-6">
+            {items.map(item => (
+              <div key={item.product_id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex gap-4 items-center">
+                <img
+                  src={item.image_url || `https://picsum.photos/seed/jachi-${item.product_id}/400/400`}
+                  alt={item.name}
+                  className="w-20 h-20 rounded-lg object-cover flex-shrink-0"
+                />
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-gray-900 text-sm sm:text-base truncate">{item.name}</h3>
+                  <p className="text-sm text-indigo-600 font-semibold mt-0.5">{formatPrice(item.price)}</p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <button
+                      onClick={() => {
+                        if (item.quantity <= 1) {
+                          removeItem(item.product_id);
+                          addToast(`${item.name}을(를) 삭제했습니다`, 'info');
+                        } else {
+                          updateQuantity(item.product_id, item.quantity - 1);
+                        }
+                      }}
+                      className="w-8 h-8 rounded-lg border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors font-bold"
+                    >-</button>
+                    <span className="w-8 text-center font-bold text-sm text-gray-900">{item.quantity}</span>
+                    <button
+                      onClick={() => updateQuantity(item.product_id, item.quantity + 1)}
+                      className="w-8 h-8 rounded-lg border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors font-bold"
+                    >+</button>
+                  </div>
+                </div>
+                <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                  <span className="font-extrabold text-gray-900 text-sm sm:text-base">{formatPrice(item.price * item.quantity)}</span>
+                  <button
+                    onClick={() => { removeItem(item.product_id); addToast(`${item.name}을(를) 삭제했습니다`, 'info'); }}
+                    className="text-xs text-red-500 hover:text-red-700 font-medium transition-colors"
+                  >삭제</button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 sticky bottom-4">
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-gray-600 font-medium">총 금액</span>
+              <span className="text-2xl font-extrabold text-indigo-600">{formatPrice(totalPrice)}</span>
+            </div>
+            <Button variant="primary" size="lg" className="w-full" onClick={() => setCurrentPage('checkout')}>
+              결제하기
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    // ========================================
+    // Checkout Page (TossPayments Widget)
+    // ========================================
+    const TOSS_CLIENT_KEY = 'test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm';
+
+    function CheckoutPage({ setCurrentPage }) {
+      const { user } = useAuth();
+      const { items, totalPrice, clearCart } = useCart();
+      const { addToast } = useToast();
+      const [loading, setLoading] = useState(true);
+      const [paying, setPaying] = useState(false);
+      const [error, setError] = useState('');
+      const widgetsRef = useRef(null);
+      const renderedRef = useRef(false);
+
+      const orderName = useMemo(() => {
+        if (items.length === 0) return '';
+        if (items.length === 1) return items[0].name;
+        return `${items[0].name} 외 ${items.length - 1}건`;
+      }, [items]);
+
+      useEffect(() => {
+        if (!user || items.length === 0 || renderedRef.current) return;
+
+        async function initWidget() {
+          try {
+            const tossPayments = TossPayments(TOSS_CLIENT_KEY);
+            const customerKey = `user-${user.id}`;
+            const widgets = tossPayments.widgets({ customerKey });
+            widgetsRef.current = widgets;
+
+            await widgets.setAmount({ currency: 'KRW', value: totalPrice });
+
+            await Promise.all([
+              widgets.renderPaymentMethods({ selector: '#payment-method', variantKey: 'DEFAULT' }),
+              widgets.renderAgreement({ selector: '#agreement', variantKey: 'AGREEMENT' }),
+            ]);
+
+            renderedRef.current = true;
+            setLoading(false);
+          } catch (err) {
+            console.error('Widget init error:', err);
+            setError('결제 위젯을 불러오는데 실패했습니다.');
+            setLoading(false);
+          }
+        }
+
+        initWidget();
+
+        return () => {
+          renderedRef.current = false;
+          widgetsRef.current = null;
+        };
+      }, [user]);
+
+      // 금액 변경 시 위젯 금액 업데이트
+      useEffect(() => {
+        if (widgetsRef.current && renderedRef.current) {
+          widgetsRef.current.setAmount({ currency: 'KRW', value: totalPrice });
+        }
+      }, [totalPrice]);
+
+      const handlePayment = async () => {
+        if (!widgetsRef.current || paying) return;
+        setPaying(true);
+
+        try {
+          // 1. 서버에 주문 생성
+          const orderId = `ORDER-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+          const orderRes = await fetch('/api/orders', {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+              orderId,
+              orderName,
+              amount: totalPrice,
+              items: items.map(i => ({ product_id: i.product_id, name: i.name, price: i.price, quantity: i.quantity })),
+            }),
+          });
+          const orderJson = await orderRes.json();
+          if (!orderJson.success) {
+            addToast(orderJson.message || '주문 생성 실패', 'error');
+            setPaying(false);
+            return;
+          }
+
+          // 2. 토스페이먼츠 결제 요청
+          await widgetsRef.current.requestPayment({
+            orderId,
+            orderName,
+            customerEmail: user.email,
+            customerName: user.nickname,
+            successUrl: window.location.origin + `/shop?status=success`,
+            failUrl: window.location.origin + `/shop?status=fail`,
+          });
+        } catch (err) {
+          // 사용자가 결제를 취소한 경우
+          if (err.code === 'USER_CANCEL') {
+            addToast('결제가 취소되었습니다.', 'info');
+          } else {
+            console.error('Payment error:', err);
+            addToast(err.message || '결제 중 오류가 발생했습니다.', 'error');
+          }
+          setPaying(false);
+        }
+      };
+
+      if (items.length === 0) {
+        return (
+          <div className="max-w-3xl mx-auto px-4 py-20 text-center fade-in">
+            <span className="text-6xl block mb-4">🛒</span>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">결제할 상품이 없습니다</h2>
+            <Button variant="primary" size="lg" onClick={() => setCurrentPage('home')}>쇼핑하러 가기</Button>
+          </div>
+        );
+      }
+
+      return (
+        <div className="max-w-2xl mx-auto px-4 py-6 fade-in">
+          <button onClick={() => setCurrentPage('cart')} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-4">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+            장바구니로 돌아가기
+          </button>
+
+          <h2 className="text-2xl font-extrabold text-gray-900 mb-6">결제하기</h2>
+
+          {/* 주문 요약 */}
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 mb-6">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">주문 요약</h3>
+            <div className="space-y-2">
+              {items.map(item => (
+                <div key={item.product_id} className="flex justify-between text-sm">
+                  <span className="text-gray-600">{item.name} x {item.quantity}</span>
+                  <span className="font-medium text-gray-900">{formatPrice(item.price * item.quantity)}</span>
+                </div>
+              ))}
+            </div>
+            <div className="border-t border-gray-100 mt-3 pt-3 flex justify-between">
+              <span className="font-semibold text-gray-900">총 결제 금액</span>
+              <span className="text-xl font-extrabold text-indigo-600">{formatPrice(totalPrice)}</span>
+            </div>
+          </div>
+
+          {error ? (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
+              <p className="text-red-600 font-medium">{error}</p>
+              <Button variant="secondary" size="md" className="mt-4" onClick={() => setCurrentPage('cart')}>장바구니로 돌아가기</Button>
+            </div>
+          ) : (
+            <>
+              {/* 토스페이먼츠 결제수단 위젯 */}
+              <div id="payment-method" className="mb-4">
+                {loading && (
+                  <div className="bg-white rounded-xl border border-gray-100 p-12 flex flex-col items-center gap-3">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                    <p className="text-sm text-gray-500">결제 위젯을 불러오는 중...</p>
+                  </div>
+                )}
+              </div>
+
+              {/* 토스페이먼츠 이용약관 위젯 */}
+              <div id="agreement" className="mb-6"></div>
+
+              {/* 결제 버튼 */}
+              <Button
+                variant="primary"
+                size="lg"
+                className="w-full"
+                onClick={handlePayment}
+                disabled={loading || paying}
+              >
+                {paying ? '결제 처리 중...' : `${formatPrice(totalPrice)} 결제하기`}
+              </Button>
+            </>
+          )}
+        </div>
+      );
+    }
+
+    // ========================================
+    // Payment Result Page
+    // ========================================
+    function PaymentSuccessPage({ setCurrentPage }) {
+      const { addToast } = useToast();
+      const { clearCart } = useCart();
+      const [status, setStatus] = useState('loading'); // loading, success, error
+      const [errorMsg, setErrorMsg] = useState('');
+      const confirmedRef = useRef(false);
+
+      useEffect(() => {
+        if (confirmedRef.current) return;
+        confirmedRef.current = true;
+
+        const params = new URLSearchParams(window.location.search);
+        const paymentKey = params.get('paymentKey');
+        const orderId = params.get('orderId');
+        const amount = params.get('amount');
+
+        if (!paymentKey || !orderId || !amount) {
+          setStatus('error');
+          setErrorMsg('결제 정보가 올바르지 않습니다.');
+          return;
+        }
+
+        // 서버에 결제 승인 요청
+        fetch('/api/payments/confirm', {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ paymentKey, orderId, amount: Number(amount) }),
+        })
+          .then(r => r.json())
+          .then(json => {
+            if (json.success) {
+              setStatus('success');
+              clearCart();
+              // URL에서 쿼리 파라미터 제거
+              window.history.replaceState({}, '', '/shop');
+            } else {
+              setStatus('error');
+              setErrorMsg(json.message || '결제 승인에 실패했습니다.');
+            }
+          })
+          .catch(err => {
+            console.error('Confirm error:', err);
+            setStatus('error');
+            setErrorMsg('결제 승인 중 오류가 발생했습니다.');
+          });
+      }, []);
+
+      if (status === 'loading') {
+        return (
+          <div className="max-w-lg mx-auto px-4 py-20 text-center fade-in">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+            <h2 className="text-xl font-bold text-gray-900">결제 승인 중...</h2>
+            <p className="text-gray-500 mt-2">잠시만 기다려주세요.</p>
+          </div>
+        );
+      }
+
+      if (status === 'error') {
+        return (
+          <div className="max-w-lg mx-auto px-4 py-20 text-center fade-in">
+            <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">결제 실패</h2>
+            <p className="text-gray-500 mb-6">{errorMsg}</p>
+            <Button variant="primary" size="lg" onClick={() => setCurrentPage('cart')}>장바구니로 돌아가기</Button>
+          </div>
+        );
+      }
+
+      return (
+        <div className="max-w-lg mx-auto px-4 py-20 text-center fade-in">
+          <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">결제가 완료되었습니다!</h2>
+          <p className="text-gray-500 mb-6">주문해주셔서 감사합니다.</p>
+          <Button variant="primary" size="lg" onClick={() => setCurrentPage('home')}>쇼핑 계속하기</Button>
+        </div>
+      );
+    }
+
+    function PaymentFailPage({ setCurrentPage }) {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code') || '';
+      const message = params.get('message') || '결제가 취소되었거나 실패했습니다.';
+
+      useEffect(() => {
+        window.history.replaceState({}, '', '/shop');
+      }, []);
+
+      return (
+        <div className="max-w-lg mx-auto px-4 py-20 text-center fade-in">
+          <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">결제 실패</h2>
+          <p className="text-gray-500 mb-1">{message}</p>
+          {code && <p className="text-xs text-gray-400 mb-6">오류 코드: {code}</p>}
+          <Button variant="primary" size="lg" onClick={() => setCurrentPage('cart')}>장바구니로 돌아가기</Button>
+        </div>
+      );
+    }
+
+    // ========================================
+    // My Page (주문 내역)
+    // ========================================
+    function MyPage({ setCurrentPage }) {
+      const { user } = useAuth();
+      const { addToast } = useToast();
+      const [orders, setOrders] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [expandedId, setExpandedId] = useState(null);
+
+      useEffect(() => {
+        if (!user) return;
+        fetch('/api/orders', { headers: getAuthHeaders() })
+          .then(r => r.json())
+          .then(json => { if (json.success) setOrders(json.data); })
+          .catch(err => console.error('Failed to fetch orders:', err))
+          .finally(() => setLoading(false));
+      }, [user]);
+
+      if (!user) {
+        return (
+          <div className="max-w-3xl mx-auto px-4 py-20 text-center fade-in">
+            <span className="text-5xl block mb-4">🔒</span>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">로그인이 필요합니다</h2>
+            <p className="text-gray-500 mb-6">주문 내역을 확인하려면 로그인해주세요.</p>
+            <Button variant="primary" size="lg" onClick={() => setCurrentPage('auth')}>로그인</Button>
+          </div>
+        );
+      }
+
+      const statusLabel = (s) => {
+        const map = { PENDING: '결제 대기', DONE: '결제 완료', FAILED: '결제 실패' };
+        return map[s] || s;
+      };
+      const statusColor = (s) => {
+        const map = { PENDING: 'bg-amber-100 text-amber-700', DONE: 'bg-emerald-100 text-emerald-700', FAILED: 'bg-red-100 text-red-700' };
+        return map[s] || 'bg-gray-100 text-gray-600';
+      };
+
+      return (
+        <div className="max-w-3xl mx-auto px-4 py-6 fade-in">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center">
+              <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+            </div>
+            <div>
+              <h2 className="text-2xl font-extrabold text-gray-900">마이페이지</h2>
+              <p className="text-sm text-gray-500">{user.email}</p>
+            </div>
+          </div>
+
+          <h3 className="text-lg font-bold text-gray-900 mb-4">주문 내역</h3>
+
+          {loading ? (
+            <div className="flex items-center justify-center h-40">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+            </div>
+          ) : orders.length === 0 ? (
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-12 text-center">
+              <span className="text-5xl block mb-4">📦</span>
+              <p className="text-gray-500 mb-4">아직 주문 내역이 없습니다.</p>
+              <Button variant="primary" size="md" onClick={() => setCurrentPage('home')}>쇼핑하러 가기</Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {orders.map(order => {
+                const items = order.items || [];
+                const isExpanded = expandedId === order.id;
+                const dateStr = new Date(order.created_at).toLocaleDateString('ko-KR', {
+                  year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                });
+
+                return (
+                  <div key={order.id} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                    <button
+                      onClick={() => setExpandedId(isExpanded ? null : order.id)}
+                      className="w-full p-5 flex items-center justify-between text-left hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${statusColor(order.status)}`}>
+                            {statusLabel(order.status)}
+                          </span>
+                          <span className="text-xs text-gray-400">{dateStr}</span>
+                        </div>
+                        <p className="font-semibold text-gray-900 text-sm truncate">{order.order_name}</p>
+                        <p className="text-xs text-gray-400 mt-0.5 font-mono">{order.order_id}</p>
+                      </div>
+                      <div className="flex items-center gap-3 flex-shrink-0 ml-4">
+                        <span className="text-lg font-extrabold text-indigo-600">{formatPrice(order.amount)}</span>
+                        <svg className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </button>
+
+                    {isExpanded && items.length > 0 && (
+                      <div className="border-t border-gray-100 px-5 py-4 bg-gray-50">
+                        <p className="text-xs font-semibold text-gray-500 mb-2">주문 상품</p>
+                        <div className="space-y-2">
+                          {items.map((item, idx) => (
+                            <div key={idx} className="flex justify-between text-sm">
+                              <span className="text-gray-700">{item.name} <span className="text-gray-400">x {item.quantity}</span></span>
+                              <span className="font-medium text-gray-900">{formatPrice(item.price * item.quantity)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ========================================
+    // App
+    // ========================================
+    function AppInner() {
+      // URL 쿼리 파라미터로 결제 결과 감지
+      const params = new URLSearchParams(window.location.search);
+      const urlStatus = params.get('status');
+      const hasPaymentKey = params.has('paymentKey');
+
+      let initialPage = 'home';
+      if (hasPaymentKey) initialPage = 'payment-success';
+      else if (urlStatus === 'fail') initialPage = 'payment-fail';
+
+      const [currentPage, setCurrentPage] = useState(initialPage);
+      const { authLoading } = useAuth();
+
+      if (authLoading) return <div className="min-h-screen flex items-center justify-center text-gray-400">로딩 중...</div>;
+
+      return (
+        <CartProvider>
+          <ToastProvider>
+            <div className="min-h-screen bg-gray-50">
+              <Header currentPage={currentPage} setCurrentPage={setCurrentPage} />
+              <main>
+                {currentPage === 'home' && <HomePage setCurrentPage={setCurrentPage} />}
+                {currentPage === 'auth' && <AuthPage setCurrentPage={setCurrentPage} />}
+                {currentPage === 'cart' && <CartPage setCurrentPage={setCurrentPage} />}
+                {currentPage === 'checkout' && <CheckoutPage setCurrentPage={setCurrentPage} />}
+                {currentPage === 'payment-success' && <PaymentSuccessPage setCurrentPage={setCurrentPage} />}
+                {currentPage === 'payment-fail' && <PaymentFailPage setCurrentPage={setCurrentPage} />}
+                {currentPage === 'mypage' && <MyPage setCurrentPage={setCurrentPage} />}
+              </main>
+              <footer className="border-t border-gray-200 bg-white mt-12">
+                <div className="max-w-6xl mx-auto px-4 py-8 text-center text-sm text-gray-400">
+                  <p className="font-medium">자취마켓 &copy; 2026</p>
+                  <p className="mt-1">자취생을 위한 합리적인 쇼핑</p>
+                </div>
+              </footer>
+            </div>
+          </ToastProvider>
+        </CartProvider>
+      );
+    }
+
+    function App() {
+      return (
+        <AuthProvider>
+          <AppInner />
+        </AuthProvider>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
