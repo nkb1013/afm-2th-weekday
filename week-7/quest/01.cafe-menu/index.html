@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>atcham</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600;700&family=Gamja+Flower&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --butter: #FEF6E4;
+      --sage: #7EA07A;
+      --coral: #D4603A;
+      --brown: #3A2E25;
+      --muted: #9B8E7E;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #DDD8CF;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    /* ═══════ Canvas ═══════ */
+    .menu {
+      width: 1080px;
+      height: 1350px;
+      background: var(--butter);
+      position: relative;
+      padding: 24px;
+    }
+
+    .menu::before {
+      content: '';
+      position: absolute;
+      inset: 14px;
+      border: 1.5px solid var(--sage);
+      pointer-events: none;
+    }
+
+    .corner {
+      position: absolute;
+      width: 32px;
+      height: 32px;
+      border-color: var(--sage);
+      border-style: solid;
+      z-index: 1;
+    }
+    .corner-tl { top: 26px; left: 26px; border-width: 3px 0 0 3px; }
+    .corner-tr { top: 26px; right: 26px; border-width: 3px 3px 0 0; }
+    .corner-bl { bottom: 26px; left: 26px; border-width: 0 0 3px 3px; }
+    .corner-br { bottom: 26px; right: 26px; border-width: 0 3px 3px 0; }
+
+    .content {
+      padding: 48px 60px 36px;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ─── Header ─── */
+    .header {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+
+    .brand {
+      font-family: 'Caveat', cursive;
+      font-size: 78px;
+      font-weight: 700;
+      color: var(--brown);
+      letter-spacing: 3px;
+      line-height: 1;
+    }
+
+    .tagline {
+      font-family: 'Caveat', cursive;
+      font-size: 24px;
+      font-weight: 400;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    /* ─── Signature Showcase ─── */
+    .showcase {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 56px;
+      margin-bottom: 44px;
+    }
+
+    .showcase-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      width: 220px;
+    }
+
+    /* Sticker effect: white outline + lifted shadow */
+    .sticker {
+      filter:
+        drop-shadow(2px 0 0 white)
+        drop-shadow(-2px 0 0 white)
+        drop-shadow(0 2px 0 white)
+        drop-shadow(0 -2px 0 white)
+        drop-shadow(0 5px 10px rgba(58, 46, 37, 0.18));
+    }
+
+    .showcase-photo {
+      width: 200px;
+      height: 200px;
+      object-fit: contain;
+    }
+
+    .showcase-badge {
+      font-family: 'Caveat', cursive;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--coral);
+      margin-top: 14px;
+      letter-spacing: 1px;
+    }
+
+    .showcase-name {
+      font-family: 'Gamja Flower', cursive;
+      font-size: 24px;
+      color: var(--brown);
+      margin-top: 4px;
+      line-height: 1.3;
+    }
+
+    .showcase-en {
+      font-family: 'Caveat', cursive;
+      font-size: 17px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .showcase-price {
+      font-family: 'Inter', sans-serif;
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--coral);
+      margin-top: 6px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .showcase-price-alt {
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+      font-weight: 300;
+      color: var(--muted);
+    }
+
+    /* ─── Category ─── */
+    .cat {
+      margin-bottom: 28px;
+    }
+
+    .cat-tag {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 10px;
+      border-top: 3px solid var(--coral);
+      border-left: 3px solid var(--coral);
+      padding: 4px 16px 6px;
+      margin-bottom: 12px;
+    }
+
+    .cat-title {
+      font-family: 'Caveat', cursive;
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--coral);
+      letter-spacing: 1px;
+    }
+
+    .cat-ko {
+      font-family: 'Gamja Flower', cursive;
+      font-size: 20px;
+      color: var(--muted);
+    }
+
+    /* ─── Menu Items ─── */
+    .menu-list {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .menu-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 6px 2px;
+    }
+
+    .menu-name {
+      font-family: 'Gamja Flower', cursive;
+      font-size: 23px;
+      color: var(--brown);
+    }
+
+    .menu-price {
+      font-family: 'Inter', sans-serif;
+      font-size: 15px;
+      font-weight: 400;
+      color: var(--brown);
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .ice-tag {
+      font-family: 'Inter', sans-serif;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* ─── Drink Grid ─── */
+    .drink-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 48px;
+    }
+
+    .temp-label {
+      font-family: 'Inter', sans-serif;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--muted);
+      text-align: right;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      padding: 0 2px 4px;
+    }
+
+    /* ─── Footer ─── */
+    .footer {
+      margin-top: auto;
+      text-align: center;
+    }
+
+    .footer-text {
+      font-family: 'Caveat', cursive;
+      font-size: 22px;
+      color: var(--muted);
+      letter-spacing: 1px;
+    }
+  </style>
+</head>
+<body>
+  <div class="menu">
+    <div class="corner corner-tl"></div>
+    <div class="corner corner-tr"></div>
+    <div class="corner corner-bl"></div>
+    <div class="corner corner-br"></div>
+
+    <div class="content">
+
+      <header class="header">
+        <h1 class="brand">atcham</h1>
+        <p class="tagline">a calm morning, a full beginning</p>
+      </header>
+
+      <!-- Signature Showcase -->
+      <div class="showcase">
+        <div class="showcase-item">
+          <div class="sticker">
+            <img class="showcase-photo" src="images/morning-plate.png" alt="morning plate" />
+          </div>
+          <div class="showcase-badge">- signature -</div>
+          <div class="showcase-name">atcham 모닝 플레이트</div>
+          <div class="showcase-en">morning plate</div>
+          <div class="showcase-price">14,500</div>
+        </div>
+        <div class="showcase-item">
+          <div class="sticker">
+            <img class="showcase-photo" src="images/atcham-latte.png" alt="atcham latte" />
+          </div>
+          <div class="showcase-badge">- signature -</div>
+          <div class="showcase-name">atcham 라떼</div>
+          <div class="showcase-en">brown sugar oat latte</div>
+          <div class="showcase-price">
+            6,000
+            <span class="showcase-price-alt"> / ice 6,500</span>
+          </div>
+        </div>
+        <div class="showcase-item">
+          <div class="sticker">
+            <img class="showcase-photo" src="images/chamomile-milk.png" alt="chamomile honey milk" />
+          </div>
+          <div class="showcase-badge">- signature -</div>
+          <div class="showcase-name">캐모마일 허니 밀크</div>
+          <div class="showcase-en">chamomile honey milk</div>
+          <div class="showcase-price">
+            6,500
+            <span class="showcase-price-alt"> / ice 7,000</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Breakfast -->
+      <div class="cat">
+        <div class="cat-tag">
+          <span class="cat-title">Breakfast</span>
+          <span class="cat-ko">아침 식사</span>
+        </div>
+        <div class="menu-list">
+          <div class="menu-row">
+            <span class="menu-name">리코타 허니 토스트</span>
+            <span class="menu-price">9,800</span>
+          </div>
+          <div class="menu-row">
+            <span class="menu-name">그래놀라 요거트 볼</span>
+            <span class="menu-price">8,500</span>
+          </div>
+          <div class="menu-row">
+            <span class="menu-name">크로크무슈</span>
+            <span class="menu-price">10,500</span>
+          </div>
+          <div class="menu-row">
+            <span class="menu-name">오늘의 수프 &amp; 빵</span>
+            <span class="menu-price">8,000</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Drinks -->
+      <div class="drink-grid">
+        <div class="cat">
+          <div class="cat-tag">
+            <span class="cat-title">Coffee</span>
+            <span class="cat-ko">커피</span>
+          </div>
+          <div class="temp-label">hot · ice</div>
+          <div class="menu-list">
+            <div class="menu-row">
+              <span class="menu-name">에스프레소</span>
+              <span class="menu-price">4,000</span>
+            </div>
+            <div class="menu-row">
+              <span class="menu-name">아메리카노</span>
+              <span class="menu-price">4,500 · 5,000</span>
+            </div>
+            <div class="menu-row">
+              <span class="menu-name">카페라떼</span>
+              <span class="menu-price">5,500 · 6,000</span>
+            </div>
+            <div class="menu-row">
+              <span class="menu-name">카푸치노</span>
+              <span class="menu-price">5,500</span>
+            </div>
+            <div class="menu-row">
+              <span class="menu-name">바닐라 라떼</span>
+              <span class="menu-price">6,000 · 6,500</span>
+            </div>
+            <div class="menu-row">
+              <span class="menu-name">콜드브루</span>
+              <span class="menu-price"><span class="ice-tag">ice </span>5,500</span>
+            </div>
+            <div class="menu-row">
+              <span class="menu-name">아인슈페너</span>
+              <span class="menu-price"><span class="ice-tag">ice </span>6,500</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="cat">
+          <div class="cat-tag">
+            <span class="cat-title">Non-Coffee</span>
+            <span class="cat-ko">논커피</span>
+          </div>
+          <div class="temp-label">hot · ice</div>
+          <div class="menu-list">
+            <div class="menu-row">
+              <span class="menu-name">말차 라떼</span>
+              <span class="menu-price">6,000 · 6,500</span>
+            </div>
+            <div class="menu-row">
+              <span class="menu-name">얼그레이 밀크티</span>
+              <span class="menu-price">6,000 · 6,500</span>
+            </div>
+            <div class="menu-row">
+              <span class="menu-name">유자 허니티</span>
+              <span class="menu-price">5,500 · 6,000</span>
+            </div>
+            <div class="menu-row">
+              <span class="menu-name">루이보스</span>
+              <span class="menu-price">5,000</span>
+            </div>
+            <div class="menu-row">
+              <span class="menu-name">핫초코</span>
+              <span class="menu-price">6,000 · 6,500</span>
+            </div>
+            <div class="menu-row">
+              <span class="menu-name">딸기 바나나 스무디</span>
+              <span class="menu-price"><span class="ice-tag">ice </span>7,000</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer class="footer">
+        <p class="footer-text">your morning begins here</p>
+      </footer>
+
+    </div>
+  </div>
+</body>
+</html>
