@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Business Card - Noting Curator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Noto+Serif+KR:wght@200;300;400&family=Inter:wght@300;400&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #e8e4df;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: 'Inter', sans-serif;
+      gap: 80px;
+      padding: 60px 20px;
+    }
+
+    .label {
+      font-family: 'Inter', sans-serif;
+      font-size: 11px;
+      font-weight: 300;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #999;
+      margin-bottom: 16px;
+    }
+
+    .card-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* 명함 사이즈: 90mm x 50mm → 화면 비율 유지 */
+    .card {
+      width: 540px;
+      height: 300px;
+      background: #faf8f5;
+      border-radius: 4px;
+      position: relative;
+      overflow: hidden;
+      box-shadow:
+        0 1px 3px rgba(0, 0, 0, 0.04),
+        0 4px 12px rgba(0, 0, 0, 0.03),
+        0 12px 40px rgba(0, 0, 0, 0.04);
+    }
+
+    /* ─── 앞면 ─── */
+    .card-front {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 60px;
+    }
+
+    .card-front .role {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 22px;
+      font-weight: 300;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: #2c2c2c;
+      margin-bottom: 6px;
+    }
+
+    .card-front .sub-role {
+      font-family: 'Noto Serif KR', serif;
+      font-size: 11px;
+      font-weight: 200;
+      letter-spacing: 2px;
+      color: #a09788;
+      margin-bottom: 22px;
+    }
+
+    .card-front .divider {
+      width: 28px;
+      height: 1px;
+      background: #c4b8a8;
+      margin-bottom: 20px;
+    }
+
+    .card-front .name {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 15px;
+      font-weight: 400;
+      letter-spacing: 6px;
+      text-transform: uppercase;
+      color: #7a7168;
+    }
+
+    /* ─── 뒷면 ─── */
+    .card-back {
+      display: flex;
+      flex-direction: row;
+      padding: 48px 52px;
+    }
+
+    .card-back .left {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .card-back .tagline {
+      font-family: 'Noto Serif KR', serif;
+      font-size: 15px;
+      font-weight: 200;
+      color: #2c2c2c;
+      letter-spacing: 1px;
+      line-height: 1.8;
+    }
+
+    .card-back .contact {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .card-back .contact-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 11px;
+      font-weight: 300;
+      letter-spacing: 0.5px;
+      color: #8a8078;
+    }
+
+    .card-back .contact-item .icon {
+      width: 14px;
+      height: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .card-back .contact-item .icon svg {
+      width: 13px;
+      height: 13px;
+      stroke: #b0a89e;
+      fill: none;
+      stroke-width: 1.5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .card-back .right {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-left: 40px;
+    }
+
+    .qr-placeholder {
+      width: 100px;
+      height: 100px;
+      border: 1px solid #ddd6cc;
+      border-radius: 3px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .qr-placeholder .qr-grid {
+      width: 72px;
+      height: 72px;
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      grid-template-rows: repeat(7, 1fr);
+      gap: 1.5px;
+      opacity: 0.2;
+    }
+
+    .qr-placeholder .qr-grid .cell {
+      background: #8a8078;
+      border-radius: 0.5px;
+    }
+
+    .qr-placeholder .qr-label {
+      position: absolute;
+      bottom: -22px;
+      font-size: 8px;
+      font-weight: 300;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #b5ada5;
+    }
+
+    /* ─── 인쇄용 ─── */
+    @media print {
+      body {
+        background: white;
+        gap: 40mm;
+      }
+
+      .label {
+        display: none;
+      }
+
+      .card {
+        box-shadow: none;
+        border: 0.5px solid #eee;
+        width: 90mm;
+        height: 50mm;
+        page-break-inside: avoid;
+      }
+
+      .card-front {
+        padding: 15mm;
+      }
+
+      .card-front .role {
+        font-size: 5.5mm;
+      }
+
+      .card-front .name {
+        font-size: 3.8mm;
+      }
+
+      .card-back {
+        padding: 10mm 12mm;
+      }
+
+      .card-back .tagline {
+        font-size: 3.8mm;
+      }
+
+      .card-back .contact-item {
+        font-size: 2.8mm;
+      }
+
+      .qr-placeholder {
+        width: 22mm;
+        height: 22mm;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 앞면 -->
+  <div class="card-wrapper">
+    <div class="label">Front</div>
+    <div class="card card-front">
+      <div class="role">Noting Curator</div>
+      <div class="sub-role">알아차림 명상 큐레이터</div>
+      <div class="divider"></div>
+      <div class="name">Keumbi Noh</div>
+    </div>
+  </div>
+
+  <!-- 뒷면 -->
+  <div class="card-wrapper">
+    <div class="label">Back</div>
+    <div class="card card-back">
+      <div class="left">
+        <div class="tagline">지금 알아차리고 있나요</div>
+        <div class="contact">
+          <div class="contact-item">
+            <span class="icon">
+              <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 4l10 9 10-9"/></svg>
+            </span>
+            thenoting.curator@gmail.com
+          </div>
+          <div class="contact-item">
+            <span class="icon">
+              <svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1.5" fill="#b0a89e" stroke="none"/></svg>
+            </span>
+            @the.noting_
+          </div>
+        </div>
+      </div>
+      <div class="right">
+        <div class="qr-placeholder">
+          <div class="qr-grid">
+            <div class="cell"></div><div class="cell"></div><div class="cell"></div><div></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+            <div class="cell"></div><div></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div></div><div class="cell"></div>
+            <div class="cell"></div><div class="cell"></div><div class="cell"></div><div></div><div></div><div class="cell"></div><div class="cell"></div>
+            <div></div><div class="cell"></div><div></div><div class="cell"></div><div></div><div class="cell"></div><div></div>
+            <div class="cell"></div><div class="cell"></div><div></div><div></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+            <div class="cell"></div><div></div><div class="cell"></div><div class="cell"></div><div></div><div></div><div class="cell"></div>
+            <div class="cell"></div><div class="cell"></div><div class="cell"></div><div></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+          </div>
+          <span class="qr-label">QR Code</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>
