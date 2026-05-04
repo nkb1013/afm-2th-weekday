@@ -1,0 +1,1347 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>noting heal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+  <style>
+    * { -webkit-tap-highlight-color: transparent; }
+    input:focus, textarea:focus { outline: none; }
+
+    .font-caveat { font-family: 'Caveat', cursive; }
+    .font-playfair { font-family: 'Playfair Display', serif; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeIn 0.6s ease-out forwards; opacity: 0; }
+    .fade-in-d1 { animation-delay: 0.15s; }
+    .fade-in-d2 { animation-delay: 0.3s; }
+    .fade-in-d3 { animation-delay: 0.45s; }
+    .fade-in-d4 { animation-delay: 0.6s; }
+
+    @keyframes screenFadeOut {
+      from { opacity: 1; }
+      to { opacity: 0; }
+    }
+    .screen-fade-out { animation: screenFadeOut 0.4s ease-out forwards; }
+
+    @keyframes checkinSlideIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .checkin-item {
+      animation: checkinSlideIn 0.5s ease-out forwards;
+      opacity: 0;
+    }
+    .checkin-item:nth-child(1) { animation-delay: 0.1s; }
+    .checkin-item:nth-child(2) { animation-delay: 0.25s; }
+    .checkin-item:nth-child(3) { animation-delay: 0.4s; }
+    .checkin-item:nth-child(4) { animation-delay: 0.55s; }
+
+    @keyframes selectedWrite {
+      from { opacity: 0; transform: translateX(-4px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    .selected-write { animation: selectedWrite 0.35s ease-out forwards; }
+
+    @keyframes dotPulse {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 1; }
+    }
+    .dot-pulse { animation: dotPulse 1.5s ease-in-out infinite; }
+
+    @keyframes modalFadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @keyframes modalSlideUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .modal-overlay { animation: modalFadeIn 0.25s ease-out forwards; }
+    .modal-content { animation: modalSlideUp 0.3s ease-out forwards; }
+
+    .window-overlay {
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+    .window-overlay:hover {
+      outline: 2px solid rgba(26, 26, 94, 0.35);
+      outline-offset: -1px;
+    }
+
+    /* Timer ring animation */
+    .timer-ring-bg { fill: none; stroke: rgba(26, 26, 94, 0.15); stroke-width: 4; }
+    .timer-ring-fg { fill: none; stroke: #1a1a5e; stroke-width: 4; stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(26, 26, 94, 0.2); border-radius: 2px; }
+  </style>
+</head>
+<body style="background-color: #EDE9E3;">
+  <div id="root"></div>
+  <script type="text/babel">
+
+// ========================================
+// React Hooks Destructuring
+// ========================================
+const { useState, useCallback, useMemo, useEffect, useRef, createContext, useContext } = React;
+
+// ========================================
+// Constants & Configuration
+// ========================================
+
+const COLORS = {
+  cream: '#EDE9E3',
+  navy: '#1a1a5e',
+  navyLight: 'rgba(26, 26, 94, 0.08)',
+  navyMid: 'rgba(26, 26, 94, 0.3)',
+  navyFaint: 'rgba(26, 26, 94, 0.05)',
+  text: '#3a3530',
+  textLight: '#8a8480',
+};
+
+const EMOTIONS = [
+  { key: 'anxious',   label: '불안' },
+  { key: 'tense',     label: '긴장' },
+  { key: 'lethargic', label: '무기력' },
+  { key: 'irritated', label: '짜증' },
+  { key: 'confused',  label: '혼란' },
+  { key: 'lonely',    label: '외로움' },
+  { key: 'calm',      label: '차분함' },
+  { key: 'joy',       label: '기쁨' },
+  { key: 'excited',   label: '기대' },
+  { key: 'grateful',  label: '감사' },
+  { key: 'fear',      label: '두려움' },
+  { key: 'energetic', label: '활기' },
+];
+
+const PLACES = [
+  { key: 'home',    label: '집' },
+  { key: 'office',  label: '오피스' },
+  { key: 'cafe',    label: '카페' },
+  { key: 'outside', label: '밖' },
+  { key: 'moving',  label: '이동 중' },
+];
+
+const TIMES = [
+  { key: 1, label: '1분', seconds: 60 },
+  { key: 3, label: '3분', seconds: 180 },
+  { key: 5, label: '5분', seconds: 300 },
+];
+
+// ========================================
+// Window Positions (% of building image)
+// ========================================
+// Easily adjustable: {left, top, width, height} as percentages
+
+const WINDOW_POSITIONS = {
+  floor3: [
+    { id: 301, left: 19, top: 18, width: 10, height: 12 },
+    { id: 302, left: 31, top: 18, width: 10, height: 12 },
+    { id: 303, left: 44, top: 18, width: 12, height: 12 },
+    { id: 304, left: 58, top: 18, width: 10, height: 12 },
+    { id: 305, left: 70, top: 18, width: 10, height: 12 },
+  ],
+  floor2: [
+    { id: 201, left: 19, top: 35, width: 10, height: 12 },
+    { id: 202, left: 31, top: 35, width: 10, height: 12 },
+    { id: 203, left: 44, top: 35, width: 12, height: 12 },
+    { id: 204, left: 58, top: 35, width: 10, height: 12 },
+    { id: 205, left: 70, top: 35, width: 10, height: 12 },
+  ],
+  floor1: [
+    { id: 101, left: 19, top: 52, width: 10, height: 12 },
+    { id: 102, left: 31, top: 52, width: 10, height: 12 },
+    { id: 103, left: 44, top: 52, width: 12, height: 12 },
+    { id: 104, left: 58, top: 52, width: 10, height: 12 },
+    { id: 105, left: 70, top: 52, width: 10, height: 12 },
+  ],
+  entrance: { left: 42, top: 68, width: 16, height: 14 },
+};
+
+// Visited rooms (dummy)
+const VISITED_ROOMS = new Set([101, 104, 202, 204, 302, 305]);
+
+// ========================================
+// Room Data
+// ========================================
+
+const ROOM_DATA = {
+  // 1F - 감정 룸
+  101: { id: 101, floor: '1F', theme: '감정 룸', title: '비교', desc: 'SNS 보다 내가 작아질 때' },
+  102: { id: 102, floor: '1F', theme: '감정 룸', title: '불안', desc: '모든 게 무너질 것 같은 순간' },
+  103: { id: 103, floor: '1F', theme: '감정 룸', title: '분노', desc: '참고 또 참다가 터질 때' },
+  104: { id: 104, floor: '1F', theme: '감정 룸', title: '우울', desc: '이유 없이 가라앉는 날' },
+  105: { id: 105, floor: '1F', theme: '감정 룸', title: '외로움', desc: '사람들 사이에서 혼자인 느낌' },
+  // 2F - 공간 룸
+  201: { id: 201, floor: '2F', theme: '공간 룸', title: '지하철', desc: '지하철에서 눈을 감았을 때' },
+  202: { id: 202, floor: '2F', theme: '공간 룸', title: '카페', desc: '카페 한 구석에 앉았을 때' },
+  203: { id: 203, floor: '2F', theme: '공간 룸', title: '침대', desc: '이불 속에서 나오기 싫을 때' },
+  204: { id: 204, floor: '2F', theme: '공간 룸', title: '사무실', desc: '자리에서 숨이 막힐 때' },
+  205: { id: 205, floor: '2F', theme: '공간 룸', title: '밖', desc: '걷다가 문득 멈췄을 때' },
+  // 3F - 시간 룸
+  301: { id: 301, floor: '3F', theme: '시간 룸', title: '새벽', desc: '새벽 3시, 잠이 오지 않을 때' },
+  302: { id: 302, floor: '3F', theme: '시간 룸', title: '출근길', desc: '출근길, 발이 무거울 때' },
+  303: { id: 303, floor: '3F', theme: '시간 룸', title: '점심 후', desc: '점심 후, 오후가 막막할 때' },
+  304: { id: 304, floor: '3F', theme: '시간 룸', title: '퇴근길', desc: '퇴근길, 오늘도 끝났다 싶을 때' },
+  305: { id: 305, floor: '3F', theme: '시간 룸', title: '잠들기 전', desc: '잠들기 전, 머릿속이 멈추지 않을 때' },
+};
+
+// ========================================
+// Noting Methods
+// ========================================
+
+const NOTING_METHODS = [
+  { places: ['office'], emotions: ['tense', 'anxious'], times: [1], name: '눈 위아래로 천천히 굴리기', guide: '의자에 앉은 채로 눈을 감고, 눈동자를 천천히 위아래로 움직여보세요.' },
+  { places: ['office'], emotions: ['tense'], times: [3, 5], name: '자리에서 세 번 깊은 숨 쉬기', guide: '코로 4초 들이쉬고, 잠깐 멈추고, 입으로 6초 내쉬세요. 세 번 반복합니다.' },
+  { places: ['home'], emotions: ['lethargic'], times: [3, 5], name: '복식호흡 3분', guide: '편하게 누워서 배 위에 손을 올려보세요. 숨을 들이쉴 때 배가 올라오고, 내쉴 때 내려가는 걸 느껴보세요.' },
+  { places: ['home'], emotions: ['lethargic'], times: [1], name: '주위에서 빨간 물체 3개 찾아보기', guide: '지금 있는 공간에서 빨간색 물체를 세 개 찾아보세요.' },
+  { places: ['cafe'], emotions: ['calm', 'anxious'], times: [1], name: '컵을 두 손으로 감싸고 온기 느끼기', guide: '따뜻한 컵이 있다면 두 손으로 감싸보세요. 손바닥으로 전해지는 온기에 집중해보세요.' },
+  { places: ['cafe'], emotions: ['anxious'], times: [3, 5], name: '주변 소리 3개 세어보기', guide: '눈을 감고 지금 들리는 소리를 하나씩 세어보세요.' },
+  { places: ['outside'], emotions: ['calm'], times: [1, 3], name: '하늘 올려다보고 구름 관찰하기', guide: '잠깐 멈춰서 하늘을 올려다보세요. 구름의 모양, 움직임을 가만히 바라봐보세요.' },
+  { places: ['moving'], emotions: ['anxious', 'confused'], times: [1], name: '손가락 하나씩 접으며 다섯까지 세기', guide: '한 손을 펴고, 손가락을 하나씩 천천히 접으며 다섯까지 세어보세요.' },
+  { places: ['moving'], emotions: ['confused'], times: [3, 5], name: '지금 보이는 것 하나에 집중하기', guide: '눈에 보이는 한 가지를 골라 자세히 관찰해보세요.' },
+  { places: ['home'], emotions: ['joy', 'grateful'], times: [1, 3], name: '감사한 것 하나 떠올리기', guide: '지금 이 순간 감사한 것 하나만 떠올려보세요.' },
+  { places: ['office'], emotions: ['lethargic'], times: [1], name: '어깨를 귀까지 올렸다 내리기', guide: '어깨를 귀까지 올려 3초 유지한 뒤 툭 내려놓으세요. 세 번 반복합니다.' },
+  { places: ['home'], emotions: ['confused', 'fear'], times: [3, 5], name: '눈 감고 호흡 세기', guide: '눈을 감고 들숨과 날숨을 하나씩 세어보세요. 열까지 세면 다시 처음부터.' },
+];
+
+const DEFAULT_METHODS = [
+  { name: '지금 느끼는 감각 하나에 집중하기', guide: '몸에서 지금 가장 먼저 느껴지는 감각 하나에 집중해보세요.' },
+  { name: '코끝에 닿는 공기 느껴보기', guide: '숨을 쉴 때 코끝에 닿는 공기의 온도를 느껴보세요.' },
+  { name: '주변에서 초록색 찾아보기', guide: '지금 있는 공간에서 초록색인 것을 찾아보세요.' },
+];
+
+function recommendMethod(placeKey, emotionKey, timeKey) {
+  const matches = NOTING_METHODS.filter(m =>
+    m.places.includes(placeKey) && m.emotions.includes(emotionKey) && m.times.includes(timeKey)
+  );
+  if (matches.length > 0) return matches[Math.floor(Math.random() * matches.length)];
+  const partial = NOTING_METHODS.filter(m =>
+    m.places.includes(placeKey) && m.times.includes(timeKey)
+  );
+  if (partial.length > 0) return partial[Math.floor(Math.random() * partial.length)];
+  return DEFAULT_METHODS[Math.floor(Math.random() * DEFAULT_METHODS.length)];
+}
+
+// ========================================
+// Dummy Records
+// ========================================
+
+function createDate(daysAgo) {
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  d.setHours(9, 0, 0, 0);
+  return d;
+}
+
+const INITIAL_RECORDS = [
+  { id: '1', roomId: 101, emotion: 'anxious', place: 'office', time: 1, method: '주위에서 빨간 물체 3개 찾아보기', text: '회사에서 새 프로젝트 제안이 왔는데 결정을 못 내리겠다', createdAt: createDate(0) },
+  { id: '2', roomId: 104, emotion: 'lethargic', place: 'home', time: 3, method: '복식호흡 3분', text: '아무것도 하고 싶지 않은 하루', createdAt: createDate(1) },
+  { id: '3', roomId: 202, emotion: 'calm', place: 'cafe', time: 1, method: '컵을 두 손으로 감싸고 온기 느끼기', text: '오랜만에 산책하니까 머릿속이 비워진 느낌', createdAt: createDate(2) },
+  { id: '4', roomId: 204, emotion: 'tense', place: 'office', time: 1, method: '눈 위아래로 천천히 굴리기', text: '또 부족하다는 생각이 들었다', createdAt: createDate(3) },
+  { id: '5', roomId: 302, emotion: 'anxious', place: 'moving', time: 1, method: '손가락 하나씩 접으며 다섯까지 세기', text: '잘하고 있는 건지 확신이 없다', createdAt: createDate(4) },
+  { id: '6', roomId: 305, emotion: 'confused', place: 'home', time: 3, method: '눈 감고 호흡 세기', text: '내가 뭘 원하는지 모르겠다', createdAt: createDate(5) },
+];
+
+// ========================================
+// Utility Functions
+// ========================================
+
+function formatDate(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}.${m}.${d}`;
+}
+
+function getDateGroupLabel(date) {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diff = Math.floor((today - target) / (1000 * 60 * 60 * 24));
+  if (diff === 0) return '오늘';
+  if (diff === 1) return '어제';
+  if (diff <= 6) return '이번 주';
+  return '이전';
+}
+
+function groupRecordsByDate(records) {
+  const groups = { '오늘': [], '어제': [], '이번 주': [], '이전': [] };
+  const sorted = [...records].sort((a, b) => b.createdAt - a.createdAt);
+  sorted.forEach(r => {
+    const label = getDateGroupLabel(r.createdAt);
+    groups[label].push(r);
+  });
+  return groups;
+}
+
+function getTodayFormatted() {
+  const now = new Date();
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  return `${days[now.getDay()]}, ${months[now.getMonth()]} ${now.getDate()}`;
+}
+
+function getEmotionLabel(key) {
+  const e = EMOTIONS.find(em => em.key === key);
+  return e ? e.label : key;
+}
+
+function getPlaceLabel(key) {
+  const p = PLACES.find(pl => pl.key === key);
+  return p ? p.label : key;
+}
+
+function extractFrequentWords(records) {
+  const stopWords = new Set(['나','내','는','은','이','가','을','를','의','에','에서','도','만','좀','와','과','한','그','것','수','안','못','더','다','로','으로','하고','있는','없는','하는','되는','했다','있다','없다','같다','되다','너무','진짜','정말','되게','약간','그냥','좀','다시']);
+  const wordCount = {};
+  records.forEach(r => {
+    const words = r.text.replace(/[.,!?~\-()'"]/g, ' ').split(/\s+/).filter(w => w.length >= 2);
+    words.forEach(w => {
+      if (!stopWords.has(w)) wordCount[w] = (wordCount[w] || 0) + 1;
+    });
+  });
+  return Object.entries(wordCount).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([word, count]) => ({ word, count }));
+}
+
+function getEmotionStats(records) {
+  const counts = {};
+  records.forEach(r => { counts[r.emotion] = (counts[r.emotion] || 0) + 1; });
+  return Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([key, count]) => ({ key, label: getEmotionLabel(key), count }));
+}
+
+function generateCalendarData(records) {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const recordMap = {};
+  records.forEach(r => {
+    const key = `${r.createdAt.getDate()}`;
+    if (!recordMap[key]) recordMap[key] = [];
+    if (r.createdAt.getMonth() === month && r.createdAt.getFullYear() === year) {
+      recordMap[key].push(r.emotion);
+    }
+  });
+  const days = [];
+  for (let i = 0; i < firstDay; i++) days.push({ day: null, emotions: [] });
+  for (let d = 1; d <= daysInMonth; d++) days.push({ day: d, emotions: recordMap[String(d)] || [] });
+  return { year, month, days };
+}
+
+// Room assignment logic
+function assignRoom(placeKey, emotionKey) {
+  // Emotion-based: floor 1, Space-based: floor 2, otherwise floor 3
+  const negativeEmotions = ['anxious', 'tense', 'lethargic', 'irritated', 'confused', 'lonely', 'fear'];
+  if (negativeEmotions.includes(emotionKey)) {
+    const rooms = [101, 102, 103, 104, 105];
+    return rooms[Math.floor(Math.random() * rooms.length)];
+  }
+  if (['cafe', 'office', 'outside'].includes(placeKey)) {
+    const rooms = [201, 202, 203, 204, 205];
+    return rooms[Math.floor(Math.random() * rooms.length)];
+  }
+  const rooms = [301, 302, 303, 304, 305];
+  return rooms[Math.floor(Math.random() * rooms.length)];
+}
+
+
+// ========================================
+// App State Context
+// ========================================
+
+const AppContext = createContext();
+
+function AppProvider({ children }) {
+  const [screen, setScreen] = useState('login'); // login, gate, building, checkin, room-assign, noting, writing, checkout
+  const [activeTab, setActiveTab] = useState('building'); // building, noting, records, insight
+  const [records, setRecords] = useState(INITIAL_RECORDS);
+  const [emotions, setEmotions] = useState(EMOTIONS);
+  const [checkinData, setCheckinData] = useState({ place: null, emotion: null, time: null });
+  const [assignedRoom, setAssignedRoom] = useState(null);
+  const [assignedMethod, setAssignedMethod] = useState(null);
+
+  const addRecord = useCallback((record) => {
+    setRecords(prev => [record, ...prev]);
+  }, []);
+
+  const addCustomEmotion = useCallback((label) => {
+    const key = 'custom_' + Date.now();
+    setEmotions(prev => [...prev, { key, label }]);
+    return key;
+  }, []);
+
+  const startNoting = useCallback(() => {
+    const { place, emotion, time } = checkinData;
+    const roomId = assignRoom(place, emotion);
+    const room = ROOM_DATA[roomId];
+    const method = recommendMethod(place, emotion, time);
+    setAssignedRoom(room);
+    setAssignedMethod(method);
+    setScreen('room-assign');
+  }, [checkinData]);
+
+  const value = useMemo(() => ({
+    screen, setScreen,
+    activeTab, setActiveTab,
+    records, addRecord,
+    emotions, addCustomEmotion,
+    checkinData, setCheckinData,
+    assignedRoom, assignedMethod,
+    startNoting,
+  }), [screen, activeTab, records, emotions, checkinData, assignedRoom, assignedMethod, startNoting, addRecord, addCustomEmotion]);
+
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+}
+
+function useApp() { return useContext(AppContext); }
+
+
+// ========================================
+// Design System Components
+// ========================================
+
+function NavyButton({ children, onClick, disabled, variant = 'primary', className = '' }) {
+  const base = 'rounded-lg text-sm font-medium transition-all duration-200 active:scale-[0.98]';
+  const variants = {
+    primary: `py-3 px-6 ${disabled ? 'opacity-30 cursor-not-allowed' : ''}`,
+    ghost: 'py-2.5 px-4',
+  };
+  const styles = {
+    primary: { backgroundColor: disabled ? COLORS.navy : COLORS.navy, color: COLORS.cream },
+    ghost: { color: COLORS.textLight },
+  };
+  return (
+    <button onClick={disabled ? undefined : onClick} className={`${base} ${variants[variant]} ${className}`} style={styles[variant]} disabled={disabled}>
+      {children}
+    </button>
+  );
+}
+
+function ChoicePill({ label, selected, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className="px-4 py-2 rounded-full text-sm transition-all duration-200 border"
+      style={{
+        backgroundColor: selected ? COLORS.navy : COLORS.cream,
+        color: selected ? COLORS.cream : COLORS.navy,
+        borderColor: COLORS.navy,
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+function DottedDivider() {
+  return <div className="border-b border-dashed my-6" style={{ borderColor: 'rgba(26, 26, 94, 0.2)' }}></div>;
+}
+
+
+// ========================================
+// Screen 1: Login
+// ========================================
+
+function LoginScreen() {
+  const { setScreen } = useApp();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    setScreen('gate');
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center px-6" style={{ backgroundColor: COLORS.cream }}>
+      <div className="w-full max-w-sm">
+        <div className="text-center mb-12 fade-in">
+          <h1 className="font-playfair text-3xl font-semibold tracking-wide mb-3" style={{ color: COLORS.navy }}>
+            noting heal
+          </h1>
+          <p className="text-sm leading-relaxed" style={{ color: COLORS.textLight }}>
+            생각이 멈추지 않을 때.
+          </p>
+        </div>
+
+        <form onSubmit={handleLogin} className="space-y-4 fade-in fade-in-d1">
+          <div>
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="이메일"
+              className="w-full border rounded-lg px-4 py-3 text-sm"
+              style={{ backgroundColor: COLORS.cream, borderColor: COLORS.navy, color: COLORS.navy }}
+              aria-label="이메일 입력"
+            />
+          </div>
+          <div>
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="비밀번호"
+              className="w-full border rounded-lg px-4 py-3 text-sm"
+              style={{ backgroundColor: COLORS.cream, borderColor: COLORS.navy, color: COLORS.navy }}
+              aria-label="비밀번호 입력"
+            />
+          </div>
+          <NavyButton onClick={handleLogin} className="w-full">
+            시작하기
+          </NavyButton>
+        </form>
+
+        <p className="text-center text-xs mt-8 fade-in fade-in-d2" style={{ color: COLORS.textLight }}>
+          See the frame, not the answer.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+
+// ========================================
+// Screen 2: Building Facade (Main Home)
+// ========================================
+
+function BuildingScreen() {
+  const { setScreen, setActiveTab } = useApp();
+  const [modalRoom, setModalRoom] = useState(null);
+
+  const allWindows = useMemo(() => [
+    ...WINDOW_POSITIONS.floor3,
+    ...WINDOW_POSITIONS.floor2,
+    ...WINDOW_POSITIONS.floor1,
+  ], []);
+
+  const handleEntranceClick = () => {
+    setScreen('gate-closeup');
+  };
+
+  const handleWindowClick = (roomId) => {
+    const room = ROOM_DATA[roomId];
+    if (room) setModalRoom(room);
+  };
+
+  return (
+    <div className="min-h-screen pb-20 flex flex-col" style={{ backgroundColor: COLORS.cream }}>
+      {/* Building image container */}
+      <div className="flex-1 flex flex-col items-center justify-center px-4 pt-4">
+        <div className="relative w-full max-w-md fade-in">
+          <img
+            src="./image/noting heal.png"
+            alt="noting heal building"
+            className="w-full h-auto block"
+            draggable="false"
+          />
+
+          {/* Window overlays */}
+          {allWindows.map(win => {
+            const visited = VISITED_ROOMS.has(win.id);
+            return (
+              <div
+                key={win.id}
+                className="window-overlay absolute rounded-sm"
+                style={{
+                  left: `${win.left}%`,
+                  top: `${win.top}%`,
+                  width: `${win.width}%`,
+                  height: `${win.height}%`,
+                  backgroundColor: visited ? 'rgba(26, 26, 94, 0.25)' : 'transparent',
+                }}
+                onClick={() => handleWindowClick(win.id)}
+                title={`Room ${win.id}`}
+              />
+            );
+          })}
+
+          {/* Entrance overlay */}
+          <div
+            className="window-overlay absolute rounded-sm"
+            style={{
+              left: `${WINDOW_POSITIONS.entrance.left}%`,
+              top: `${WINDOW_POSITIONS.entrance.top}%`,
+              width: `${WINDOW_POSITIONS.entrance.width}%`,
+              height: `${WINDOW_POSITIONS.entrance.height}%`,
+            }}
+            onClick={handleEntranceClick}
+            title="대문"
+          />
+        </div>
+
+        {/* Prompt text */}
+        <p className="font-caveat text-xl mt-4 fade-in fade-in-d1" style={{ color: 'rgba(26, 26, 94, 0.45)' }}>
+          문을 두드려 보세요
+        </p>
+      </div>
+
+      {/* Room modal */}
+      {modalRoom && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-6 modal-overlay"
+          style={{ backgroundColor: 'rgba(26, 26, 94, 0.35)', backdropFilter: 'blur(2px)' }}
+          onClick={() => setModalRoom(null)}
+        >
+          <div
+            className="w-full max-w-[340px] rounded-xl p-6 modal-content"
+            style={{ backgroundColor: COLORS.cream, border: `1.5px solid ${COLORS.navy}` }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-xs font-medium tracking-wider" style={{ color: COLORS.navy }}>
+                Room {modalRoom.id}
+              </span>
+              <span className="text-[10px] tracking-wide" style={{ color: COLORS.textLight }}>
+                {modalRoom.floor} · {modalRoom.theme}
+              </span>
+              {VISITED_ROOMS.has(modalRoom.id) && (
+                <span className="text-[9px] px-2 py-0.5 rounded-full ml-auto" style={{ backgroundColor: COLORS.navy, color: COLORS.cream }}>
+                  visited
+                </span>
+              )}
+            </div>
+            <h3 className="font-playfair text-xl font-semibold mb-1" style={{ color: COLORS.navy }}>
+              {modalRoom.title}
+            </h3>
+            <p className="text-sm mb-5" style={{ color: COLORS.textLight }}>
+              {modalRoom.desc}
+            </p>
+
+            <NavyButton onClick={() => { setModalRoom(null); setScreen('checkin'); setActiveTab('noting'); }} className="w-full mb-2">
+              체크인하기
+            </NavyButton>
+            <button onClick={() => setModalRoom(null)} className="w-full py-2.5 rounded-lg text-sm" style={{ color: COLORS.textLight }}>
+              닫기
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+// ========================================
+// Screen 3: Gate Closeup
+// ========================================
+
+function GateCloseupScreen() {
+  const { setScreen } = useApp();
+  const [fading, setFading] = useState(false);
+
+  const handleClick = () => {
+    if (fading) return;
+    setFading(true);
+    setTimeout(() => setScreen('checkin'), 400);
+  };
+
+  return (
+    <div
+      className={`min-h-screen flex flex-col items-center justify-center px-6 cursor-pointer select-none ${fading ? 'screen-fade-out' : 'fade-in'}`}
+      style={{ backgroundColor: COLORS.cream }}
+      onClick={handleClick}
+      role="button"
+      aria-label="문을 두드려 다음으로 이동"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleClick(); }}
+    >
+      <div className="mb-6" style={{ width: '75%', maxWidth: '320px' }}>
+        <img
+          src="./image/noting heal_profile.png"
+          alt="noting heal 대문"
+          className="w-full h-auto block"
+          draggable="false"
+        />
+      </div>
+      <p className="font-caveat text-xl" style={{ color: 'rgba(26, 26, 94, 0.45)' }}>
+        문을 두드려 보세요
+      </p>
+    </div>
+  );
+}
+
+
+// ========================================
+// Screen 4: Self Check-in
+// ========================================
+
+function CheckinScreen() {
+  const { checkinData, setCheckinData, startNoting, emotions, addCustomEmotion } = useApp();
+  const [customInput, setCustomInput] = useState('');
+  const [showCustom, setShowCustom] = useState(false);
+
+  const { place, emotion, time } = checkinData;
+  const allSelected = place && emotion && time;
+
+  const selectPlace = (key) => setCheckinData(prev => ({ ...prev, place: key }));
+  const selectEmotion = (key) => setCheckinData(prev => ({ ...prev, emotion: key }));
+  const selectTime = (key) => setCheckinData(prev => ({ ...prev, time: key }));
+
+  const handleAddCustom = () => {
+    if (customInput.trim()) {
+      const key = addCustomEmotion(customInput.trim());
+      selectEmotion(key);
+      setCustomInput('');
+      setShowCustom(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen pb-24 px-6 pt-12" style={{ backgroundColor: COLORS.cream }}>
+      <div className="max-w-md mx-auto">
+        {/* Header */}
+        <div className="checkin-item mb-2">
+          <h1 className="font-playfair text-2xl font-semibold" style={{ color: COLORS.navy }}>
+            Self Check-in
+          </h1>
+        </div>
+        <div className="checkin-item mb-10">
+          <p className="font-caveat text-lg" style={{ color: COLORS.textLight }}>
+            {getTodayFormatted()}
+          </p>
+        </div>
+
+        {/* Question 1: Place */}
+        <div className="checkin-item mb-2">
+          <p className="text-[11px] font-medium uppercase tracking-[0.2em] mb-4" style={{ color: COLORS.navy }}>
+            지금 어디에 있나요?
+          </p>
+          <div className="flex flex-wrap gap-2 mb-2">
+            {PLACES.map(p => (
+              <ChoicePill key={p.key} label={p.label} selected={place === p.key} onClick={() => selectPlace(p.key)} />
+            ))}
+          </div>
+          {place && (
+            <div className="mt-3 border-b pb-1" style={{ borderColor: 'rgba(26, 26, 94, 0.3)', borderStyle: 'dotted' }}>
+              <span className="font-caveat text-xl selected-write" style={{ color: COLORS.navy }}>
+                {getPlaceLabel(place)}
+              </span>
+            </div>
+          )}
+        </div>
+
+        <DottedDivider />
+
+        {/* Question 2: Emotion */}
+        <div className="checkin-item mb-2">
+          <p className="text-[11px] font-medium uppercase tracking-[0.2em] mb-4" style={{ color: COLORS.navy }}>
+            지금 감정은?
+          </p>
+          <div className="flex flex-wrap gap-2 mb-2">
+            {emotions.map(em => (
+              <ChoicePill key={em.key} label={em.label} selected={emotion === em.key} onClick={() => selectEmotion(em.key)} />
+            ))}
+            <button
+              onClick={() => setShowCustom(!showCustom)}
+              className="px-3 py-2 rounded-full text-sm border border-dashed"
+              style={{ borderColor: COLORS.navy, color: COLORS.navy }}
+            >
+              + 직접 추가
+            </button>
+          </div>
+          {showCustom && (
+            <div className="flex gap-2 mt-3">
+              <input
+                value={customInput}
+                onChange={e => setCustomInput(e.target.value)}
+                placeholder="감정을 적어주세요"
+                className="flex-1 border-b px-1 py-1 text-sm font-caveat"
+                style={{ backgroundColor: 'transparent', borderColor: COLORS.navy, color: COLORS.navy }}
+                onKeyDown={e => { if (e.key === 'Enter') handleAddCustom(); }}
+              />
+              <button onClick={handleAddCustom} className="text-sm px-3 py-1 rounded" style={{ backgroundColor: COLORS.navy, color: COLORS.cream }}>
+                추가
+              </button>
+            </div>
+          )}
+          {emotion && (
+            <div className="mt-3 border-b pb-1" style={{ borderColor: 'rgba(26, 26, 94, 0.3)', borderStyle: 'dotted' }}>
+              <span className="font-caveat text-xl selected-write" style={{ color: COLORS.navy }}>
+                {getEmotionLabel(emotion) || emotions.find(e => e.key === emotion)?.label}
+              </span>
+            </div>
+          )}
+        </div>
+
+        <DottedDivider />
+
+        {/* Question 3: Time */}
+        <div className="checkin-item mb-2">
+          <p className="text-[11px] font-medium uppercase tracking-[0.2em] mb-4" style={{ color: COLORS.navy }}>
+            노팅 가능한 시간은?
+          </p>
+          <div className="flex flex-wrap gap-2 mb-2">
+            {TIMES.map(t => (
+              <ChoicePill key={t.key} label={t.label} selected={time === t.key} onClick={() => selectTime(t.key)} />
+            ))}
+          </div>
+          {time && (
+            <div className="mt-3 border-b pb-1" style={{ borderColor: 'rgba(26, 26, 94, 0.3)', borderStyle: 'dotted' }}>
+              <span className="font-caveat text-xl selected-write" style={{ color: COLORS.navy }}>
+                {TIMES.find(t => t.key === time)?.label}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Submit */}
+        <div className="mt-10">
+          <NavyButton onClick={startNoting} disabled={!allSelected} className="w-full">
+            체크인 완료
+          </NavyButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ========================================
+// Screen 5: Room Assignment
+// ========================================
+
+function RoomAssignScreen() {
+  const { assignedRoom, assignedMethod, checkinData, setScreen } = useApp();
+
+  if (!assignedRoom || !assignedMethod) return null;
+
+  return (
+    <div className="min-h-screen pb-24 px-6 pt-16 flex flex-col items-center" style={{ backgroundColor: COLORS.cream }}>
+      <div className="max-w-md w-full text-center">
+        {/* Room number */}
+        <div className="fade-in mb-3">
+          <h1 className="font-playfair text-4xl font-bold" style={{ color: COLORS.navy }}>
+            Room {assignedRoom.id}
+          </h1>
+        </div>
+
+        {/* Room description */}
+        <div className="fade-in fade-in-d1 mb-2">
+          <p className="font-caveat text-xl" style={{ color: COLORS.textLight }}>
+            {assignedRoom.desc}
+          </p>
+        </div>
+
+        {/* Floor info */}
+        <div className="fade-in fade-in-d1 mb-10">
+          <p className="text-xs tracking-wide" style={{ color: COLORS.textLight }}>
+            {assignedRoom.floor} · {assignedRoom.theme}
+          </p>
+        </div>
+
+        {/* Recommended method */}
+        <div className="fade-in fade-in-d2 rounded-xl p-6 text-left mb-10" style={{ backgroundColor: COLORS.navyLight, border: `1px solid rgba(26, 26, 94, 0.12)` }}>
+          <p className="text-[10px] uppercase tracking-[0.15em] mb-3" style={{ color: COLORS.textLight }}>
+            추천 노팅 방법
+          </p>
+          <h3 className="font-playfair text-lg font-semibold mb-3" style={{ color: COLORS.navy }}>
+            {assignedMethod.name}
+          </h3>
+          <p className="text-sm leading-relaxed" style={{ color: COLORS.text }}>
+            {assignedMethod.guide}
+          </p>
+        </div>
+
+        {/* Enter button */}
+        <div className="fade-in fade-in-d3">
+          <NavyButton onClick={() => setScreen('noting')} className="w-full">
+            입장하기
+          </NavyButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ========================================
+// Screen 6: Noting (Timer)
+// ========================================
+
+function NotingScreen() {
+  const { checkinData, assignedMethod, setScreen } = useApp();
+  const totalSeconds = TIMES.find(t => t.key === checkinData.time)?.seconds || 60;
+  const [remaining, setRemaining] = useState(totalSeconds);
+  const [isRunning, setIsRunning] = useState(true);
+  const intervalRef = useRef(null);
+
+  useEffect(() => {
+    if (isRunning && remaining > 0) {
+      intervalRef.current = setInterval(() => {
+        setRemaining(prev => {
+          if (prev <= 1) {
+            clearInterval(intervalRef.current);
+            setIsRunning(false);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(intervalRef.current);
+  }, [isRunning, remaining]);
+
+  const progress = 1 - (remaining / totalSeconds);
+  const circumference = 2 * Math.PI * 54;
+  const dashOffset = circumference * (1 - progress);
+
+  const formatTime = (sec) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
+  };
+
+  const handleComplete = () => {
+    clearInterval(intervalRef.current);
+    setScreen('writing');
+  };
+
+  return (
+    <div className="min-h-screen pb-24 px-6 flex flex-col items-center justify-center" style={{ backgroundColor: COLORS.cream }}>
+      <div className="max-w-md w-full text-center">
+        {/* Timer ring */}
+        <div className="fade-in mb-8">
+          <svg width="140" height="140" viewBox="0 0 120 120" className="mx-auto">
+            <circle className="timer-ring-bg" cx="60" cy="60" r="54" />
+            <circle
+              className="timer-ring-fg"
+              cx="60" cy="60" r="54"
+              strokeDasharray={circumference}
+              strokeDashoffset={dashOffset}
+              transform="rotate(-90 60 60)"
+            />
+          </svg>
+          <p className="font-playfair text-3xl font-semibold mt-4" style={{ color: COLORS.navy }}>
+            {formatTime(remaining)}
+          </p>
+        </div>
+
+        {/* Method guide */}
+        <div className="fade-in fade-in-d1 mb-10 px-4">
+          <p className="font-caveat text-xl leading-relaxed" style={{ color: COLORS.navy }}>
+            {assignedMethod?.name}
+          </p>
+          <p className="text-sm mt-3 leading-relaxed" style={{ color: COLORS.textLight }}>
+            {assignedMethod?.guide}
+          </p>
+        </div>
+
+        {/* Complete button */}
+        <div className="fade-in fade-in-d2">
+          <NavyButton onClick={handleComplete} className="w-full">
+            {remaining === 0 ? '완료' : '일찍 마치기'}
+          </NavyButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ========================================
+// Screen 7: Writing (One sentence)
+// ========================================
+
+function WritingScreen() {
+  const { setScreen, addRecord, assignedRoom, assignedMethod, checkinData } = useApp();
+  const [text, setText] = useState('');
+  const maxLen = 100;
+
+  const handleSubmit = () => {
+    if (!text.trim()) return;
+    const record = {
+      id: String(Date.now()),
+      roomId: assignedRoom?.id || 101,
+      emotion: checkinData.emotion,
+      place: checkinData.place,
+      time: checkinData.time,
+      method: assignedMethod?.name || '',
+      text: text.trim(),
+      createdAt: new Date(),
+    };
+    addRecord(record);
+    setScreen('checkout');
+  };
+
+  return (
+    <div className="min-h-screen pb-24 px-6 pt-16 flex flex-col items-center justify-center" style={{ backgroundColor: COLORS.cream }}>
+      <div className="max-w-md w-full">
+        <div className="fade-in text-center mb-10">
+          <h1 className="font-playfair text-xl font-semibold" style={{ color: COLORS.navy }}>
+            지금 떠오르는 것을 한 문장으로
+          </h1>
+        </div>
+
+        <div className="fade-in fade-in-d1 mb-6">
+          <textarea
+            value={text}
+            onChange={e => setText(e.target.value.slice(0, maxLen))}
+            placeholder="여기에 적어보세요..."
+            rows={4}
+            className="w-full border rounded-xl px-5 py-4 text-lg font-caveat resize-none"
+            style={{ backgroundColor: COLORS.cream, borderColor: COLORS.navy, color: COLORS.navy }}
+          />
+          <div className="flex justify-end mt-2">
+            <span className="text-xs" style={{ color: COLORS.textLight }}>
+              {text.length}/{maxLen}
+            </span>
+          </div>
+        </div>
+
+        <div className="fade-in fade-in-d2">
+          <NavyButton onClick={handleSubmit} disabled={!text.trim()} className="w-full">
+            기록하기
+          </NavyButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ========================================
+// Screen 8: Checkout
+// ========================================
+
+function CheckoutScreen() {
+  const { setScreen, setActiveTab, setCheckinData } = useApp();
+
+  const goBuilding = () => {
+    setCheckinData({ place: null, emotion: null, time: null });
+    setActiveTab('building');
+    setScreen('building');
+  };
+
+  const goRecords = () => {
+    setCheckinData({ place: null, emotion: null, time: null });
+    setActiveTab('records');
+    setScreen('building');
+  };
+
+  return (
+    <div className="min-h-screen pb-24 px-6 flex flex-col items-center justify-center" style={{ backgroundColor: COLORS.cream }}>
+      <div className="max-w-md w-full text-center">
+        {/* Check icon */}
+        <div className="fade-in mb-6">
+          <svg width="64" height="64" viewBox="0 0 64 64" className="mx-auto">
+            <circle cx="32" cy="32" r="28" fill="none" stroke={COLORS.navy} strokeWidth="2" />
+            <polyline points="20,34 28,42 44,26" fill="none" stroke={COLORS.navy} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+
+        <div className="fade-in fade-in-d1 mb-3">
+          <h1 className="font-playfair text-xl font-semibold" style={{ color: COLORS.navy }}>
+            오늘의 노팅이 완료되었습니다
+          </h1>
+        </div>
+
+        <div className="fade-in fade-in-d2 mb-12">
+          <p className="font-caveat text-xl" style={{ color: COLORS.textLight }}>
+            잘 머물다 가세요
+          </p>
+        </div>
+
+        <div className="fade-in fade-in-d3 space-y-3">
+          <NavyButton onClick={goBuilding} className="w-full">
+            건물로 돌아가기
+          </NavyButton>
+          <button onClick={goRecords} className="w-full py-3 rounded-lg text-sm border" style={{ borderColor: COLORS.navy, color: COLORS.navy }}>
+            기록 보기
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ========================================
+// Records Tab
+// ========================================
+
+function RecordsTab() {
+  const { records } = useApp();
+  const grouped = useMemo(() => groupRecordsByDate(records), [records]);
+  const groupOrder = ['오늘', '어제', '이번 주', '이전'];
+
+  return (
+    <div className="min-h-screen pb-24 px-6 pt-10" style={{ backgroundColor: COLORS.cream }}>
+      <div className="max-w-md mx-auto">
+        <h1 className="font-playfair text-2xl font-semibold mb-8 fade-in" style={{ color: COLORS.navy }}>
+          기록 열람
+        </h1>
+
+        {groupOrder.map(group => {
+          const items = grouped[group];
+          if (!items || items.length === 0) return null;
+          return (
+            <div key={group} className="mb-8">
+              <p className="text-[11px] uppercase tracking-[0.15em] mb-3" style={{ color: COLORS.textLight }}>
+                {group}
+              </p>
+              <div className="space-y-3">
+                {items.map(record => (
+                  <div
+                    key={record.id}
+                    className="rounded-xl p-4 border"
+                    style={{ borderColor: 'rgba(26, 26, 94, 0.15)', backgroundColor: COLORS.cream }}
+                  >
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <span className="text-[10px] tracking-wide" style={{ color: COLORS.textLight }}>
+                        {formatDate(record.createdAt)}
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full border" style={{ borderColor: COLORS.navy, color: COLORS.navy }}>
+                        Room {record.roomId}
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: COLORS.navyLight, color: COLORS.navy }}>
+                        {getEmotionLabel(record.emotion)}
+                      </span>
+                    </div>
+                    {record.method && (
+                      <p className="text-xs mb-2" style={{ color: COLORS.textLight }}>
+                        {record.method}
+                      </p>
+                    )}
+                    <p className="font-caveat text-lg" style={{ color: COLORS.navy }}>
+                      "{record.text}"
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+
+        {records.length === 0 && (
+          <div className="text-center py-16">
+            <p className="text-sm" style={{ color: COLORS.textLight }}>아직 기록이 없습니다</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+// ========================================
+// Insight Tab
+// ========================================
+
+function InsightTab() {
+  const { records } = useApp();
+  const emotionStats = useMemo(() => getEmotionStats(records), [records]);
+  const frequentWords = useMemo(() => extractFrequentWords(records), [records]);
+  const calendarData = useMemo(() => generateCalendarData(records), [records]);
+  const maxCount = emotionStats.length > 0 ? emotionStats[0].count : 1;
+  const monthNames = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+  const dayHeaders = ['일','월','화','수','목','금','토'];
+
+  return (
+    <div className="min-h-screen pb-24 px-6 pt-10" style={{ backgroundColor: COLORS.cream }}>
+      <div className="max-w-md mx-auto">
+        <h1 className="font-playfair text-2xl font-semibold mb-8 fade-in" style={{ color: COLORS.navy }}>
+          인사이트
+        </h1>
+
+        {/* Emotion stats bar chart */}
+        <div className="mb-10 fade-in fade-in-d1">
+          <p className="text-[11px] uppercase tracking-[0.15em] mb-4" style={{ color: COLORS.textLight }}>
+            감정 통계
+          </p>
+          <div className="space-y-3">
+            {emotionStats.map(stat => (
+              <div key={stat.key} className="flex items-center gap-3">
+                <span className="text-xs w-12 text-right" style={{ color: COLORS.navy }}>{stat.label}</span>
+                <div className="flex-1 h-5 rounded-full overflow-hidden" style={{ backgroundColor: COLORS.navyLight }}>
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{ width: `${(stat.count / maxCount) * 100}%`, backgroundColor: COLORS.navy }}
+                  />
+                </div>
+                <span className="text-xs w-4" style={{ color: COLORS.textLight }}>{stat.count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Frequent words */}
+        <div className="mb-10 fade-in fade-in-d2">
+          <p className="text-[11px] uppercase tracking-[0.15em] mb-4" style={{ color: COLORS.textLight }}>
+            반복 단어
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {frequentWords.map(({ word, count }) => (
+              <span
+                key={word}
+                className="px-3 py-1.5 rounded-full text-xs border"
+                style={{ borderColor: COLORS.navy, color: COLORS.navy }}
+              >
+                {word} ({count})
+              </span>
+            ))}
+          </div>
+          {frequentWords.length === 0 && (
+            <p className="text-sm" style={{ color: COLORS.textLight }}>기록이 더 쌓이면 표시됩니다</p>
+          )}
+        </div>
+
+        {/* Emotion calendar */}
+        <div className="fade-in fade-in-d3">
+          <p className="text-[11px] uppercase tracking-[0.15em] mb-4" style={{ color: COLORS.textLight }}>
+            {calendarData.year}년 {monthNames[calendarData.month]} 감정 캘린더
+          </p>
+          <div className="grid grid-cols-7 gap-1 text-center">
+            {dayHeaders.map(d => (
+              <div key={d} className="text-[10px] py-1" style={{ color: COLORS.textLight }}>{d}</div>
+            ))}
+            {calendarData.days.map((day, i) => (
+              <div key={i} className="aspect-square flex items-center justify-center relative">
+                {day.day && (
+                  <>
+                    <span className="text-[11px]" style={{ color: COLORS.navy }}>{day.day}</span>
+                    {day.emotions.length > 0 && (
+                      <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full" style={{ backgroundColor: COLORS.navy }}></div>
+                    )}
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ========================================
+// Bottom Navigation
+// ========================================
+
+function BottomNav() {
+  const { activeTab, setActiveTab, setScreen, screen } = useApp();
+
+  const tabs = [
+    { key: 'building', label: '노팅힐', icon: (active) => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+        <polyline points="9 22 9 12 15 12 15 22" />
+      </svg>
+    )},
+    { key: 'noting', label: '노팅', icon: (active) => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" />
+        <polyline points="12 6 12 12 16 14" />
+      </svg>
+    )},
+    { key: 'records', label: '기록', icon: (active) => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
+        <line x1="16" y1="13" x2="8" y2="13" />
+        <line x1="16" y1="17" x2="8" y2="17" />
+      </svg>
+    )},
+    { key: 'insight', label: '인사이트', icon: (active) => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="18" y1="20" x2="18" y2="10" />
+        <line x1="12" y1="20" x2="12" y2="4" />
+        <line x1="6" y1="20" x2="6" y2="14" />
+      </svg>
+    )},
+  ];
+
+  const handleTabClick = (key) => {
+    setActiveTab(key);
+    if (key === 'building') setScreen('building');
+    else if (key === 'noting') setScreen('checkin');
+    else if (key === 'records' || key === 'insight') setScreen('building'); // stay in main shell
+  };
+
+  // Hide nav on certain screens
+  if (['login', 'gate', 'gate-closeup'].includes(screen)) return null;
+
+  return (
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-around py-3 border-t"
+      style={{ backgroundColor: COLORS.cream, borderColor: 'rgba(26, 26, 94, 0.15)' }}
+    >
+      {tabs.map(tab => {
+        const active = activeTab === tab.key;
+        return (
+          <button
+            key={tab.key}
+            onClick={() => handleTabClick(tab.key)}
+            className="flex flex-col items-center gap-1 px-3 py-1 transition-opacity"
+            style={{ color: COLORS.navy, opacity: active ? 1 : 0.3 }}
+          >
+            {tab.icon(active)}
+            <span className="text-[10px]">{tab.label}</span>
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+
+// ========================================
+// App Component
+// ========================================
+
+function App() {
+  const { screen, activeTab } = useApp();
+
+  // Determine what to render
+  if (screen === 'login') return <LoginScreen />;
+  if (screen === 'gate') return <GateCloseupScreen />;
+  if (screen === 'gate-closeup') return <GateCloseupScreen />;
+  if (screen === 'checkin') return <><CheckinScreen /><BottomNav /></>;
+  if (screen === 'room-assign') return <><RoomAssignScreen /><BottomNav /></>;
+  if (screen === 'noting') return <><NotingScreen /><BottomNav /></>;
+  if (screen === 'writing') return <><WritingScreen /><BottomNav /></>;
+  if (screen === 'checkout') return <><CheckoutScreen /><BottomNav /></>;
+
+  // Main shell with tabs
+  let content = null;
+  if (activeTab === 'building') content = <BuildingScreen />;
+  else if (activeTab === 'noting') content = <CheckinScreen />;
+  else if (activeTab === 'records') content = <RecordsTab />;
+  else if (activeTab === 'insight') content = <InsightTab />;
+
+  return (
+    <>
+      {content}
+      <BottomNav />
+    </>
+  );
+}
+
+
+// ========================================
+// Rendering
+// ========================================
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <AppProvider>
+    <App />
+  </AppProvider>
+);
+
+  </script>
+</body>
+</html>
