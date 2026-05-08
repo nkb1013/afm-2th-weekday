@@ -33,7 +33,7 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname)));
 
 // 이미지 파일: ../image/ 폴더를 /image/ 경로로 서빙
-app.use('/image', express.static(path.join(__dirname, '..', 'image')));
+app.use('/image', express.static(path.join(__dirname, 'image')));
 
 // ========================================
 // Database Initialization (Lazy Init)
@@ -52,16 +52,21 @@ async function initDB() {
         email VARCHAR(255) UNIQUE NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
         role VARCHAR(20) DEFAULT 'user',
-        created_at TIMESTAMP DEFAULT NOW()
+        created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
 
-    // role 컬럼이 없으면 추가 (기존 테이블 대응)
+    // 기존 테이블 마이그레이션
     await client.query(`
       DO $$ BEGIN
         ALTER TABLE users ADD COLUMN role VARCHAR(20) DEFAULT 'user';
       EXCEPTION WHEN duplicate_column THEN NULL;
       END $$
+    `);
+    // TIMESTAMP → TIMESTAMPTZ 마이그레이션
+    await client.query(`
+      ALTER TABLE users ALTER COLUMN created_at TYPE TIMESTAMPTZ USING created_at AT TIME ZONE 'UTC';
+      ALTER TABLE rituals ALTER COLUMN created_at TYPE TIMESTAMPTZ USING created_at AT TIME ZONE 'UTC';
     `);
 
     await client.query(`
@@ -74,7 +79,7 @@ async function initDB() {
         time_minutes INTEGER NOT NULL,
         noting_method TEXT NOT NULL,
         noting_text TEXT,
-        created_at TIMESTAMP DEFAULT NOW()
+        created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
 
@@ -87,7 +92,7 @@ async function initDB() {
         description TEXT NOT NULL,
         conditions JSONB DEFAULT '{}',
         is_active BOOLEAN DEFAULT true,
-        created_at TIMESTAMP DEFAULT NOW(),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
       )
     `);
@@ -102,7 +107,7 @@ async function initDB() {
         emotions TEXT[] DEFAULT '{}',
         times INTEGER[] DEFAULT '{}',
         is_active BOOLEAN DEFAULT true,
-        created_at TIMESTAMP DEFAULT NOW()
+        created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
 

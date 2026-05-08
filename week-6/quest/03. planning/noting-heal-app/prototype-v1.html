@@ -761,7 +761,7 @@
           <div className="flex-1 flex flex-col items-center justify-center px-4 pt-4">
             <div className="relative w-full max-w-md fade-in">
               <img
-                src="../image/noting_heal_building.png"
+                src="/image/noting_heal_building.png"
                 alt="noting heal building"
                 className="w-full h-auto block"
                 draggable="false"
@@ -822,7 +822,7 @@
         >
           <div className="mb-6" style={{ width: '75%', maxWidth: '320px' }}>
             <img
-              src="../image/noting_heal_gate.png"
+              src="/image/noting_heal_gate.png"
               alt="noting heal 대문"
               className="w-full h-auto block"
               draggable="false"
@@ -841,7 +841,7 @@
     // ========================================
 
     function CheckinScreen() {
-      const { checkinData, setCheckinData, startNoting, emotions, addCustomEmotion } = useApp();
+      const { checkinData, setCheckinData, startNoting, emotions, addCustomEmotion, isResident, residentNumber } = useApp();
       const [customInput, setCustomInput] = useState('');
       const [showCustom, setShowCustom] = useState(false);
 
@@ -865,7 +865,17 @@
       return (
         <div className="min-h-screen pb-24 px-6 flex flex-col items-center justify-center" style={{ backgroundColor: COLORS.bg }}>
           <div className="max-w-md mx-auto w-full">
-            {/* Header */}
+            {/* Welcome + Header */}
+            {isResident && (
+              <p className="text-xs mb-3 fade-in" style={{ color: COLORS.textLight }}>
+                환영해요, No. {residentNumber}
+              </p>
+            )}
+            {!isResident && (
+              <p className="text-xs mb-3 fade-in" style={{ color: COLORS.textLight }}>
+                조용히 머물다 가셔도 좋아요
+              </p>
+            )}
             <div className="fade-in mb-2">
               <h1 className="font-playfair text-2xl font-semibold" style={{ color: COLORS.navy }}>
                 Self Check-in
@@ -1122,19 +1132,17 @@
                 const isAssigned = assignedRoom && room.id === assignedRoom.id;
                 const visits = roomVisits[room.id] || 0;
                 const isVisited = visits > 0;
-                const fillOpacity = getVisitOpacity(visits);
 
-                // 3단계: 추천(glow) > 다녀옴(fill) > 미방문(윤곽선)
-                let doorStyle = {
-                  borderColor: COLORS.stroke,
-                  backgroundColor: 'transparent',
-                  boxShadow: 'none',
+                // Fill colors by visit count
+                const visitFills = { 0: 'transparent', 1: '#F0F2F6', 2: '#E0E5EE', 3: '#E0E5EE', 4: '#C9D3E0', 5: '#C9D3E0', 6: '#C9D3E0' };
+                const fillColor = visits >= 7 ? '#B0BFD0' : (visitFills[visits] || 'transparent');
+
+                const doorStyle = {
+                  borderColor: isVisited || isAssigned ? '#1F3A60' : '#B5C0D0',
+                  backgroundColor: isAssigned ? 'transparent' : fillColor,
+                  boxShadow: isAssigned ? `0 0 16px ${COLORS.gold}AA, 0 0 32px ${COLORS.gold}60` : 'none',
                   transition: 'all 0.5s ease',
                 };
-
-                if (isAssigned) {
-                  doorStyle.boxShadow = `0 0 16px ${COLORS.gold}AA, 0 0 32px ${COLORS.gold}60`;
-                }
 
                 return (
                   <div
@@ -1143,46 +1151,19 @@
                     style={{
                       animationDelay: `${i * 0.08}s`,
                       scrollSnapAlign: 'center',
-                      opacity: isAssigned || isVisited ? 1 : 0.45,
                     }}
                     onClick={() => handleRoomClick(room)}
                   >
-                    {/* 추천 방 라벨 */}
-                    {isAssigned && (
-                      <div className="text-center mb-1 fade-in">
-                        <span className="text-[9px] px-2 py-0.5 rounded-full" style={{ backgroundColor: COLORS.gold, color: '#3a2f1e' }}>
-                          오늘의 방
-                        </span>
-                      </div>
-                    )}
-                    {!isAssigned && <div style={{ height: '18px' }} />}
-
-                    <div className="relative">
-                      {/* 다녀온 방 황동 명패 */}
-                      {isVisited && !isAssigned && (
-                        <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-10 px-2 py-0.5 rounded text-[9px] font-bold"
-                          style={{ backgroundColor: COLORS.gold, color: '#3a2f1e' }}>
-                          ×{visits}
-                        </div>
-                      )}
-
-                      <div
-                        className={`w-28 h-44 rounded-t-xl border-2 flex flex-col items-center justify-center door-hover ${isAssigned ? 'room-pulse' : ''} ${openingDoor === room.id ? 'door-opening' : ''}`}
-                        style={doorStyle}
-                      >
-                        <span className="font-playfair text-2xl font-bold" style={{ color: COLORS.stroke }}>
-                          {room.id}
-                        </span>
-                        <div
-                          className="w-2 h-2 rounded-full mt-4 mr-6 self-end"
-                          style={{ backgroundColor: COLORS.stroke, opacity: isAssigned ? 0.9 : 0.3 }}
-                        />
-                      </div>
-                    </div>
-                    <p
-                      className="text-center text-xs mt-3 leading-snug"
-                      style={{ color: COLORS.stroke, width: '7rem' }}
+                    <div
+                      className={`w-28 h-44 rounded-t-xl border-2 flex items-center justify-center ${isAssigned ? 'room-pulse' : ''} ${openingDoor === room.id ? 'door-opening' : ''}`}
+                      style={doorStyle}
                     >
+                      <span className="font-playfair text-2xl font-bold"
+                        style={{ color: isVisited || isAssigned ? '#1F3A60' : '#B5C0D0' }}>
+                        {room.id}
+                      </span>
+                    </div>
+                    <p className="text-center text-xs mt-3 leading-snug" style={{ color: '#6B7A8C', width: '7rem' }}>
                       {room.id}호{(isVisited || isAssigned) ? ` · ${room.title}` : ''}
                     </p>
                   </div>
@@ -1219,7 +1200,7 @@
             {/* Key illustration */}
             <div className="fade-in mb-6">
               <img
-                src="../image/noting_heal_key.png"
+                src="/image/noting_heal_key.png"
                 alt="room key"
                 className="w-36 h-36 mx-auto object-contain"
                 draggable="false"
@@ -1365,11 +1346,11 @@
           createdAt: new Date(),
         };
 
-        // 항상 로컬에 저장 (게스트도 입주민도)
+        // 항상 로컬에 저장 (게스트도 명패 보유자도)
         addRecord(record);
 
         if (authToken) {
-          // 입주민 → 서버에도 저장
+          // 명패 보유자 → 서버에도 저장
           try {
             await fetch('/api/rituals', {
               method: 'POST',
@@ -1491,12 +1472,12 @@
           <div className="w-full max-w-sm">
             <div className="text-center mb-3 fade-in">
               <h1 className="font-playfair text-xl font-semibold" style={{ color: COLORS.navy }}>
-                노팅힐 입주 신청
+                노팅힐 명패 받기
               </h1>
             </div>
             <div className="text-center mb-10 fade-in fade-in-d1">
               <p className="text-sm leading-relaxed" style={{ color: COLORS.textLight }}>
-                입주하시면 다녀간 방들의 기록이<br/>영구히 보관됩니다.
+                명패를 받으시면 다녀간 방들의 기록이<br/>영구히 보관됩니다.
               </p>
             </div>
 
@@ -1521,7 +1502,7 @@
                 <p className="text-xs text-center" style={{ color: '#c44' }}>{authError}</p>
               )}
               <NavyButton onClick={handleSubmit} disabled={loading} className="w-full">
-                {loading ? '처리 중...' : (isLogin ? '로그인' : '입주 완료')}
+                {loading ? '처리 중...' : (isLogin ? '로그인' : '명패 받기')}
               </NavyButton>
             </form>
 
@@ -1530,7 +1511,7 @@
               className="w-full py-2 mt-2 text-xs fade-in fade-in-d3"
               style={{ color: COLORS.navy }}
             >
-              {isLogin ? '처음이신가요? 입주 신청' : '이미 입주민이신가요? 로그인'}
+              {isLogin ? '처음이신가요? 명패 받기' : '이미 명패가 있으신가요? 로그인'}
             </button>
 
             <button
@@ -1547,7 +1528,7 @@
 
 
     // ========================================
-    // Screen: Welcome (입주 완료)
+    // Screen: Welcome (명패 발급)
     // ========================================
 
     function WelcomeScreen() {
@@ -1577,7 +1558,7 @@
 
             <div className="fade-in fade-in-d2 mb-10 space-y-2">
               <p className="text-sm" style={{ color: COLORS.textLight }}>
-                당신은 노팅힐의 {residentNumber || '?'}번째 입주민입니다.
+                명패 No. {residentNumber || '?'}이 새겨졌어요.
               </p>
               <p className="text-sm" style={{ color: COLORS.textLight }}>
                 황동 명패가 발급되었어요.
@@ -1664,8 +1645,8 @@
                 <button onClick={() => setScreen('signup')}
                   className="text-xs" style={{ color: COLORS.textLight }}>
                   {notingCount >= 3
-                    ? '지금까지의 기록을 영구히 보관하세요 — 입주 신청'
-                    : '오늘의 흔적을 영구히 보관하시겠어요? — 입주 신청'}
+                    ? '지금까지의 기록을 영구히 보관하세요 — 명패 받기'
+                    : '오늘의 흔적을 영구히 보관하시겠어요? — 명패 받기'}
                 </button>
               </div>
             )}
@@ -1680,7 +1661,7 @@
     // ========================================
 
     function RecordsTab() {
-      const { roomVisits, lastVisitDates, setScreen, setAssignedRoom, isResident } = useApp();
+      const { roomVisits, lastVisitDates, setScreen, setAssignedRoom, isResident, residentNumber } = useApp();
       const [floorFilter, setFloorFilter] = useState('all');
       const [sortBy, setSortBy] = useState('recent'); // recent | frequent
 
@@ -1715,9 +1696,22 @@
       return (
         <div className="min-h-screen pb-24 px-6 pt-10" style={{ backgroundColor: COLORS.bg }}>
           <div className="max-w-md mx-auto">
-            <h1 className="font-playfair text-2xl font-semibold mb-2 fade-in" style={{ color: COLORS.navy }}>
-              내가 머문 방들
-            </h1>
+            <div className="flex items-start justify-between mb-2 fade-in">
+              <h1 className="font-playfair text-2xl font-semibold" style={{ color: COLORS.navy }}>
+                내가 머문 방들
+              </h1>
+              {isResident ? (
+                <button onClick={() => setScreen('profile')}
+                  style={{ backgroundColor: COLORS.gold, borderRadius: 4, padding: '2px 8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span className="text-[8px] font-bold" style={{ color: '#3a2f1e' }}>#{residentNumber}</span>
+                </button>
+              ) : (
+                <button onClick={() => setScreen('signup')}
+                  className="text-[11px]" style={{ color: COLORS.textLight }}>
+                  🔑 명패 받기
+                </button>
+              )}
+            </div>
             <p className="text-sm mb-6 fade-in fade-in-d1" style={{ color: COLORS.textLight }}>
               지금까지 {visitedRooms.length}개의 방을 다녀오셨어요
             </p>
@@ -1791,12 +1785,12 @@
             {!isResident && visitedRooms.length > 0 && (
               <div className="mt-8 rounded-xl p-4 text-center border border-dashed" style={{ borderColor: COLORS.gold }}>
                 <p className="text-sm mb-3" style={{ color: COLORS.navy }}>
-                  입주하시면 모든 기록이 영구히 보관됩니다
+                  명패를 받으시면 모든 기록이 영구히 보관됩니다
                 </p>
                 <button onClick={() => setScreen('signup')}
                   className="text-xs px-4 py-2 rounded-lg"
                   style={{ backgroundColor: COLORS.gold, color: '#3a2f1e' }}>
-                  입주 신청
+                  명패 받기
                 </button>
               </div>
             )}
@@ -2173,12 +2167,12 @@
             {!isResident && (
               <div className="mt-10 rounded-xl p-4 text-center border border-dashed" style={{ borderColor: COLORS.gold }}>
                 <p className="text-sm mb-3" style={{ color: COLORS.navy }}>
-                  입주하시면 인사이트가 영구히 보관됩니다
+                  명패를 받으시면 인사이트가 영구히 보관됩니다
                 </p>
                 <button onClick={() => setScreen('signup')}
                   className="text-xs px-4 py-2 rounded-lg"
                   style={{ backgroundColor: COLORS.gold, color: '#3a2f1e' }}>
-                  입주 신청
+                  명패 받기
                 </button>
               </div>
             )}
@@ -2254,6 +2248,204 @@
 
 
     // ========================================
+    // ========================================
+    // Screen: Profile / Settings
+    // ========================================
+
+    function ProfileScreen() {
+      const { setScreen, setActiveTab, residentNumber, isResident, authToken, setAuthToken, roomVisits, records } = useApp();
+      const [confirmLogout, setConfirmLogout] = useState(false);
+      const [confirmDelete, setConfirmDelete] = useState(false);
+      const [deleteStep, setDeleteStep] = useState(0);
+
+      const totalRooms = Object.values(roomVisits).filter(v => v > 0).length;
+      const totalVisits = Object.values(roomVisits).reduce((s, v) => s + v, 0);
+
+      const handleLogout = () => {
+        localStorage.removeItem('nh_token');
+        setAuthToken(null);
+        setActiveTab('building');
+        setScreen('building');
+      };
+
+      const handleDeleteAccount = async () => {
+        // 로컬 데이터 전체 삭제
+        ['records', 'roomVisits', 'roomNotes', 'lastVisitDates', 'notingCount', 'residentNumber'].forEach(k =>
+          localStorage.removeItem('nh_guest_' + k)
+        );
+        localStorage.removeItem('nh_token');
+        localStorage.removeItem('nh_first_visit_completed');
+        setAuthToken(null);
+        setActiveTab('building');
+        setScreen('building');
+        window.location.reload();
+      };
+
+      return (
+        <div className="min-h-screen pb-24 px-6 pt-10" style={{ backgroundColor: COLORS.bg }}>
+          <div className="max-w-md mx-auto">
+            {/* Back */}
+            <button onClick={() => { setActiveTab('building'); setScreen('building'); }}
+              className="flex items-center gap-1 mb-6" style={{ color: COLORS.textLight }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+              <span className="text-xs">돌아가기</span>
+            </button>
+
+            {/* 명패 */}
+            <div className="text-center mb-8 fade-in">
+              <div className="w-44 h-28 mx-auto rounded-lg flex items-center justify-center mb-4"
+                style={{ backgroundColor: COLORS.gold, boxShadow: '0 2px 12px rgba(212,179,106,0.4)' }}>
+                <div className="text-center">
+                  <p className="text-[9px] uppercase tracking-widest" style={{ color: '#3a2f1e' }}>resident</p>
+                  <p className="font-playfair text-3xl font-bold" style={{ color: '#3a2f1e' }}>
+                    #{residentNumber || '—'}
+                  </p>
+                </div>
+              </div>
+              {!isResident && (
+                <button onClick={() => setScreen('signup')}
+                  className="text-xs px-4 py-2 rounded-lg" style={{ backgroundColor: COLORS.gold, color: '#3a2f1e' }}>
+                  명패 받기
+                </button>
+              )}
+            </div>
+
+            {/* 통계 */}
+            <div className="flex justify-center gap-8 mb-10 fade-in fade-in-d1">
+              <div className="text-center">
+                <p className="font-playfair text-2xl font-bold" style={{ color: COLORS.navy }}>{totalRooms}</p>
+                <p className="text-[10px]" style={{ color: COLORS.textLight }}>다녀온 방</p>
+              </div>
+              <div className="text-center">
+                <p className="font-playfair text-2xl font-bold" style={{ color: COLORS.navy }}>{totalVisits}</p>
+                <p className="text-[10px]" style={{ color: COLORS.textLight }}>머문 횟수</p>
+              </div>
+            </div>
+
+            {/* 설정 */}
+            <div className="fade-in fade-in-d2">
+              <p className="text-[11px] uppercase tracking-[0.15em] mb-4" style={{ color: COLORS.textLight }}>설정</p>
+              <div className="space-y-1">
+                {[
+                  '알림 설정',
+                  '사운드',
+                  '문 두드리기 모드',
+                ].map(item => (
+                  <div key={item} className="flex items-center justify-between py-3 border-b" style={{ borderColor: 'rgba(31,58,96,0.08)' }}>
+                    <span className="text-sm" style={{ color: COLORS.navy }}>{item}</span>
+                    <span className="text-xs" style={{ color: COLORS.textLight }}>
+                      {item === '사운드' ? 'OFF' : item === '문 두드리기 모드' ? 'Double tap' : ''}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 정보 */}
+            <div className="mt-8 fade-in fade-in-d3">
+              <p className="text-[11px] uppercase tracking-[0.15em] mb-4" style={{ color: COLORS.textLight }}>정보</p>
+              <div className="space-y-1">
+                {['데이터 / 프라이버시', '약관', '개인정보처리방침', '문의하기'].map(item => (
+                  <div key={item} className="py-3 border-b" style={{ borderColor: 'rgba(31,58,96,0.08)' }}>
+                    <span className="text-sm" style={{ color: COLORS.navy }}>{item}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 나가기 */}
+            <div className="mt-10 text-center fade-in fade-in-d4">
+              <button onClick={() => setConfirmLogout(true)}
+                className="text-sm" style={{ color: COLORS.textLight }}>
+                나가기 <span className="text-[10px]">(로그아웃)</span>
+              </button>
+            </div>
+
+            {/* 명패 반납 */}
+            {isResident && (
+              <div className="mt-6 text-center fade-in fade-in-d4">
+                <button onClick={() => setDeleteStep(1)}
+                  className="text-[11px]" style={{ color: '#c44' }}>
+                  명패 반납
+                </button>
+              </div>
+            )}
+
+            {/* 로그아웃 확인 */}
+            {confirmLogout && (
+              <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-6 modal-overlay"
+                onClick={() => setConfirmLogout(false)}>
+                <div className="rounded-xl w-full max-w-xs p-6 modal-content text-center"
+                  style={{ backgroundColor: COLORS.bg }} onClick={e => e.stopPropagation()}>
+                  <p className="text-sm mb-6" style={{ color: COLORS.navy }}>잠시 나가시겠어요?</p>
+                  <div className="flex gap-3">
+                    <button onClick={handleLogout}
+                      className="flex-1 py-2.5 rounded-lg text-sm border" style={{ borderColor: COLORS.navy, color: COLORS.navy }}>
+                      나가기
+                    </button>
+                    <button onClick={() => setConfirmLogout(false)}
+                      className="flex-1 py-2.5 rounded-lg text-sm" style={{ backgroundColor: COLORS.navy, color: COLORS.bg }}>
+                      머무르기
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 명패 반납 2단계 */}
+            {deleteStep > 0 && (
+              <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-6 modal-overlay"
+                onClick={() => setDeleteStep(0)}>
+                <div className="rounded-xl w-full max-w-xs p-6 modal-content text-center"
+                  style={{ backgroundColor: COLORS.bg }} onClick={e => e.stopPropagation()}>
+                  {deleteStep === 1 ? (
+                    <>
+                      <p className="text-sm mb-2 font-semibold" style={{ color: '#c44' }}>명패를 반납하시겠어요?</p>
+                      <p className="text-xs mb-6" style={{ color: COLORS.textLight }}>
+                        다녀간 방들의 기록이 모두 영구히 삭제됩니다.
+                      </p>
+                      <div className="flex gap-3">
+                        <button onClick={() => setDeleteStep(2)}
+                          className="flex-1 py-2.5 rounded-lg text-sm" style={{ backgroundColor: '#c44', color: 'white' }}>
+                          계속
+                        </button>
+                        <button onClick={() => setDeleteStep(0)}
+                          className="flex-1 py-2.5 rounded-lg text-sm border" style={{ borderColor: COLORS.navy, color: COLORS.navy }}>
+                          취소
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm mb-2 font-semibold" style={{ color: '#c44' }}>정말 삭제하시겠어요?</p>
+                      <p className="text-xs mb-6" style={{ color: COLORS.textLight }}>
+                        이 작업은 되돌릴 수 없습니다.<br/>모든 데이터가 영구히 삭제됩니다.
+                      </p>
+                      <div className="flex gap-3">
+                        <button onClick={handleDeleteAccount}
+                          className="flex-1 py-2.5 rounded-lg text-sm" style={{ backgroundColor: '#c44', color: 'white' }}>
+                          영구 삭제
+                        </button>
+                        <button onClick={() => setDeleteStep(0)}
+                          className="flex-1 py-2.5 rounded-lg text-sm border" style={{ borderColor: COLORS.navy, color: COLORS.navy }}>
+                          취소
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="h-8" />
+          </div>
+        </div>
+      );
+    }
+
+
     // Placeholder Tab (Phase 1)
     // ========================================
 
@@ -2317,7 +2509,7 @@
       };
 
       // Hide nav on certain screens
-      if (['signup', 'welcome', 'elevator', 'corridor'].includes(screen)) return null;
+      if (['signup', 'welcome', 'elevator', 'corridor', 'profile'].includes(screen)) return null;
       if (screen === 'building' && activeTab === 'building') return null;
 
       return (
@@ -2353,6 +2545,7 @@
 
       // Determine what to render
       if (screen === 'signup') return <SignupScreen />;
+      if (screen === 'profile') return <ProfileScreen />;
       if (screen === 'welcome') return <WelcomeScreen />;
       if (screen === 'checkin') return <><CheckinScreen /><BottomNav /></>;
       if (screen === 'elevator') return <ElevatorScreen />;
