@@ -1008,7 +1008,7 @@
 
       return (
         <div className="min-h-screen flex flex-col items-center justify-center screen-slide-in" style={{ backgroundColor: COLORS.bg }}>
-          <p className="text-xs mb-8 fade-in" style={{ color: COLORS.textLight }}>어디로 가시겠어요?</p>
+          <p className="text-xs mb-8 fade-in" style={{ color: COLORS.textLight }}>몇층으로 가시겠어요?</p>
           <div className="text-center">
             {/* Up button */}
             <button
@@ -1133,10 +1133,7 @@
                 };
 
                 if (isAssigned) {
-                  doorStyle.boxShadow = `0 0 16px ${COLORS.gold}, 0 0 32px ${COLORS.gold}40`;
-                  doorStyle.backgroundColor = 'rgba(31, 58, 96, 0.04)';
-                } else if (isVisited) {
-                  doorStyle.backgroundColor = `rgba(42, 90, 140, ${fillOpacity})`;
+                  doorStyle.boxShadow = `0 0 16px ${COLORS.gold}AA, 0 0 32px ${COLORS.gold}60`;
                 }
 
                 return (
@@ -1150,23 +1147,37 @@
                     }}
                     onClick={() => handleRoomClick(room)}
                   >
-                    <div
-                      className={`w-28 h-44 rounded-t-xl border-2 flex flex-col items-center justify-center door-shade door-hover ${isAssigned ? 'room-pulse' : ''} ${openingDoor === room.id ? 'door-opening' : ''}`}
-                      style={doorStyle}
-                    >
-                      <span
-                        className="font-playfair text-2xl font-bold"
-                        style={{ color: isVisited && fillOpacity > 0.5 ? '#EDE9E3' : COLORS.stroke }}
-                      >
-                        {room.id}
-                      </span>
+                    {/* 추천 방 라벨 */}
+                    {isAssigned && (
+                      <div className="text-center mb-1 fade-in">
+                        <span className="text-[9px] px-2 py-0.5 rounded-full" style={{ backgroundColor: COLORS.gold, color: '#3a2f1e' }}>
+                          오늘의 방
+                        </span>
+                      </div>
+                    )}
+                    {!isAssigned && <div style={{ height: '18px' }} />}
+
+                    <div className="relative">
+                      {/* 다녀온 방 황동 명패 */}
+                      {isVisited && !isAssigned && (
+                        <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-10 px-2 py-0.5 rounded text-[9px] font-bold"
+                          style={{ backgroundColor: COLORS.gold, color: '#3a2f1e' }}>
+                          ×{visits}
+                        </div>
+                      )}
+
                       <div
-                        className="w-2 h-2 rounded-full mt-4 mr-6 self-end"
-                        style={{
-                          backgroundColor: isVisited && fillOpacity > 0.5 ? '#EDE9E3' : COLORS.stroke,
-                          opacity: isAssigned ? 0.9 : 0.3,
-                        }}
-                      />
+                        className={`w-28 h-44 rounded-t-xl border-2 flex flex-col items-center justify-center door-hover ${isAssigned ? 'room-pulse' : ''} ${openingDoor === room.id ? 'door-opening' : ''}`}
+                        style={doorStyle}
+                      >
+                        <span className="font-playfair text-2xl font-bold" style={{ color: COLORS.stroke }}>
+                          {room.id}
+                        </span>
+                        <div
+                          className="w-2 h-2 rounded-full mt-4 mr-6 self-end"
+                          style={{ backgroundColor: COLORS.stroke, opacity: isAssigned ? 0.9 : 0.3 }}
+                        />
+                      </div>
                     </div>
                     <p
                       className="text-center text-xs mt-3 leading-snug"
@@ -1174,11 +1185,6 @@
                     >
                       {room.id}호{(isVisited || isAssigned) ? ` · ${room.title}` : ''}
                     </p>
-                    {isVisited && (
-                      <p className="text-center text-[10px] mt-1" style={{ color: COLORS.textLight }}>
-                        {visits}회 방문
-                      </p>
-                    )}
                   </div>
                 );
               })}
