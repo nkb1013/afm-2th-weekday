@@ -545,10 +545,11 @@
       const [currentFloor, setCurrentFloor] = useState('1F');
 
       const completeNoting = useCallback((roomId) => {
+        if (!authToken) return; // 게스트는 기록 쌓지 않음
         setRoomVisits(prev => ({ ...prev, [roomId]: (prev[roomId] || 0) + 1 }));
         setLastVisitDates(prev => ({ ...prev, [roomId]: new Date() }));
         setNotingCount(prev => prev + 1);
-      }, []);
+      }, [authToken]);
 
       const addRoomNote = useCallback((roomId, content) => {
         const note = { date: new Date().toISOString().split('T')[0], content };
@@ -1346,11 +1347,9 @@
           createdAt: new Date(),
         };
 
-        // 항상 로컬에 저장 (게스트도 명패 보유자도)
-        addRecord(record);
-
         if (authToken) {
-          // 명패 보유자 → 서버에도 저장
+          // 명패 보유자 → 로컬 + 서버 저장
+          addRecord(record);
           try {
             await fetch('/api/rituals', {
               method: 'POST',
@@ -1361,8 +1360,12 @@
               }),
             });
           } catch (e) { console.error('Failed to save:', e); }
+          setScreen('checkout');
+        } else {
+          // 게스트 → 저장 안 함, 명패 유도
+          setPendingRecord(record);
+          setScreen('checkout');
         }
-        setScreen('checkout');
       };
 
       return (
@@ -1628,25 +1631,26 @@
               </div>
             )}
 
-            <div className="fade-in fade-in-d3 space-y-3">
-              <NavyButton onClick={() => { setActiveTab('records'); setScreen('building'); }} className="w-full">
-                기록 보기
-              </NavyButton>
-              <button onClick={goBuilding}
-                className="w-full py-3 rounded-lg text-sm border"
-                style={{ borderColor: COLORS.navy, color: COLORS.navy }}>
-                노팅힐로 돌아가기
-              </button>
-            </div>
-
-            {/* Soft prompt for guests */}
-            {!isResident && (
-              <div className="fade-in fade-in-d4 mt-8 text-center">
-                <button onClick={() => setScreen('signup')}
-                  className="text-xs" style={{ color: COLORS.textLight }}>
-                  {notingCount >= 3
-                    ? '지금까지의 기록을 영구히 보관하세요 — 명패 받기'
-                    : '오늘의 흔적을 영구히 보관하시겠어요? — 명패 받기'}
+            {isResident ? (
+              <div className="fade-in fade-in-d3 space-y-3">
+                <NavyButton onClick={() => { setActiveTab('records'); setScreen('building'); }} className="w-full">
+                  기록 보기
+                </NavyButton>
+                <button onClick={goBuilding}
+                  className="w-full py-3 rounded-lg text-sm border"
+                  style={{ borderColor: COLORS.navy, color: COLORS.navy }}>
+                  노팅힐로 돌아가기
+                </button>
+              </div>
+            ) : (
+              <div className="fade-in fade-in-d3 space-y-3">
+                <NavyButton onClick={() => setScreen('signup')} className="w-full">
+                  이 기록을 간직하기 — 명패 받기
+                </NavyButton>
+                <button onClick={goBuilding}
+                  className="w-full py-3 rounded-lg text-sm border"
+                  style={{ borderColor: COLORS.navy, color: COLORS.navy }}>
+                  노팅힐로 돌아가기
                 </button>
               </div>
             )}
@@ -1663,7 +1667,21 @@
     function RecordsTab() {
       const { roomVisits, lastVisitDates, setScreen, setAssignedRoom, isResident, residentNumber } = useApp();
       const [floorFilter, setFloorFilter] = useState('all');
-      const [sortBy, setSortBy] = useState('recent'); // recent | frequent
+      const [sortBy, setSortBy] = useState('recent');
+
+      if (!isResident) {
+        return (
+          <div className="min-h-screen pb-24 flex flex-col items-center justify-center px-6" style={{ backgroundColor: COLORS.bg }}>
+            <h2 className="font-playfair text-xl font-semibold mb-3" style={{ color: COLORS.navy }}>내가 머문 방들</h2>
+            <p className="text-sm mb-8 text-center" style={{ color: COLORS.textLight }}>
+              명패를 받으시면 다녀간 방들의<br/>기록이 이곳에 쌓입니다
+            </p>
+            <NavyButton onClick={() => setScreen('signup')} className="px-8">
+              명패 받기
+            </NavyButton>
+          </div>
+        );
+      }
 
       const visitedRooms = useMemo(() => {
         let list = Object.entries(roomVisits)
@@ -1968,6 +1986,20 @@
     function InsightTab() {
       const { roomVisits, lastVisitDates, records, setScreen, setAssignedRoom, isResident } = useApp();
       const [period, setPeriod] = useState(30);
+
+      if (!isResident) {
+        return (
+          <div className="min-h-screen pb-24 flex flex-col items-center justify-center px-6" style={{ backgroundColor: COLORS.bg }}>
+            <h2 className="font-playfair text-xl font-semibold mb-3" style={{ color: COLORS.navy }}>마음 풍경</h2>
+            <p className="text-sm mb-8 text-center" style={{ color: COLORS.textLight }}>
+              명패를 받으시면 다녀간 방들의<br/>패턴이 이곳에 그려집니다
+            </p>
+            <NavyButton onClick={() => setScreen('signup')} className="px-8">
+              명패 받기
+            </NavyButton>
+          </div>
+        );
+      }
 
       const now = Date.now();
       const periodMs = period === 'all' ? Infinity : period * 86400000;
