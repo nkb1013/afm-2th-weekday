@@ -240,18 +240,28 @@ function MethodsTab({ methods, rooms, onEdit, onReload }) {
 
 // ========== Room Modal ==========
 function RoomModal({ room, onClose, onSave }) {
+  const defaultSteps = [{ name: '', guide: '' }, { name: '', guide: '' }, { name: '한 문장 노팅', guide: '지금 떠오르는 것을 한 문장으로 적어보세요.' }];
   const [form, setForm] = useState({
     id: room.id || '',
     floor: room.floor || '1F',
-    theme: room.theme || '감정 룸',
+    theme: room.theme || '감정 층',
     title: room.title || '',
     description: room.description || '',
     conditions: room.conditions || {},
+    steps: (room.steps && room.steps.length > 0) ? room.steps : defaultSteps,
     is_active: room.is_active !== false,
   });
   const [saving, setSaving] = useState(false);
 
-  const floorThemes = { '1F': '감정 룸', '2F': '공간 룸', '3F': '시간 룸' };
+  const floorThemes = { '1F': '감정 층', '2F': '공간 층', '3F': '시간 층' };
+
+  const updateStep = (idx, field, val) => {
+    setForm(prev => {
+      const steps = [...prev.steps];
+      steps[idx] = { ...steps[idx], [field]: val };
+      return { ...prev, steps };
+    });
+  };
   const setFloor = (f) => setForm(prev => ({ ...prev, floor: f, theme: floorThemes[f] }));
 
   const toggleCondition = (type, val) => {
@@ -308,6 +318,20 @@ function RoomModal({ room, onClose, onSave }) {
             <label className="text-xs font-medium text-gray-500 block mb-1">설명</label>
             <input value={form.description} onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
               className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="예: SNS 보다 내가 작아질 때" />
+          </div>
+
+          {/* 3-STEP 노팅 방법 */}
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-2">3-STEP 노팅 방법</label>
+            {form.steps.map((step, idx) => (
+              <div key={idx} className="mb-3 p-3 rounded-lg bg-gray-50">
+                <p className="text-[10px] font-semibold text-gray-400 mb-1">Step {idx + 1}</p>
+                <input value={step.name} onChange={e => updateStep(idx, 'name', e.target.value)}
+                  className="w-full border rounded px-2 py-1.5 text-sm mb-1" placeholder="스텝 이름 (예: 발바닥 착지)" />
+                <textarea value={step.guide} onChange={e => updateStep(idx, 'guide', e.target.value)}
+                  className="w-full border rounded px-2 py-1.5 text-sm resize-none" rows={2} placeholder="가이드 텍스트" />
+              </div>
+            ))}
           </div>
 
           <div>

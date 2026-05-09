@@ -63,6 +63,13 @@ async function initDB() {
       EXCEPTION WHEN duplicate_column THEN NULL;
       END $$
     `);
+    // steps 컬럼 추가 (기존 테이블 대응)
+    await client.query(`
+      DO $$ BEGIN
+        ALTER TABLE rooms ADD COLUMN steps JSONB DEFAULT '[]';
+      EXCEPTION WHEN duplicate_column THEN NULL;
+      END $$
+    `);
     // TIMESTAMP → TIMESTAMPTZ 마이그레이션
     await client.query(`
       ALTER TABLE users ALTER COLUMN created_at TYPE TIMESTAMPTZ USING created_at AT TIME ZONE 'UTC';
@@ -91,6 +98,7 @@ async function initDB() {
         title TEXT NOT NULL,
         description TEXT NOT NULL,
         conditions JSONB DEFAULT '{}',
+        steps JSONB DEFAULT '[]',
         is_active BOOLEAN DEFAULT true,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
@@ -111,47 +119,39 @@ async function initDB() {
       )
     `);
 
-    // Seed rooms if empty
-    const roomCount = await client.query('SELECT COUNT(*)::int AS c FROM rooms');
-    if (roomCount.rows[0].c === 0) {
-      const seedRooms = [
-        [101,'1F','감정 룸','비교','SNS 보다 내가 작아질 때','{"emotions":["anxious","confused"]}'],
-        [102,'1F','감정 룸','불안','모든 게 무너질 것 같은 순간','{"emotions":["anxious","tense","fear"]}'],
-        [103,'1F','감정 룸','분노','참고 또 참다가 터질 때','{"emotions":["irritated","tense"]}'],
-        [104,'1F','감정 룸','우울','이유 없이 가라앉는 날','{"emotions":["lethargic","lonely"]}'],
-        [201,'2F','공간 룸','지하철','지하철에서 눈을 감았을 때','{"places":["moving"]}'],
-        [202,'2F','공간 룸','카페','카페 한 구석에 앉았을 때','{"places":["cafe"]}'],
-        [203,'2F','공간 룸','사무실','자리에서 숨이 막힐 때','{"places":["office"]}'],
-        [204,'2F','공간 룸','밖','걷다가 문득 멈췄을 때','{"places":["outside"]}'],
-        [205,'2F','공간 룸','침대','이불 속에서 나오기 싫을 때','{"places":["home"]}'],
-        [301,'3F','시간 룸','새벽','새벽 3시, 잠이 오지 않을 때','{"times":[1,3]}'],
-        [302,'3F','시간 룸','출근길','출근길, 발이 무거울 때','{"times":[1]}'],
-        [303,'3F','시간 룸','잠들기 전','잠들기 전, 머릿속이 멈추지 않을 때','{"times":[3,5]}'],
-        [304,'3F','시간 룸','퇴근길','퇴근길, 오늘도 끝났다 싶을 때','{"times":[1,3]}'],
-        [305,'3F','시간 룸','주말 낮','아무 계획 없는 주말 오후','{"times":[3,5]}'],
-      ];
-      for (const r of seedRooms) {
-        await client.query('INSERT INTO rooms (id,floor,theme,title,description,conditions) VALUES ($1,$2,$3,$4,$5,$6)', r);
-      }
-
-      // Seed noting methods
-      const seedMethods = [
-        [null,'눈 위아래로 천천히 굴리기','의자에 앉은 채로 눈을 감고, 눈동자를 천천히 위아래로 움직여보세요.','{office}','{tense,anxious}','{1}'],
-        [null,'자리에서 세 번 깊은 숨 쉬기','코로 4초 들이쉬고, 잠깐 멈추고, 입으로 6초 내쉬세요. 세 번 반복합니다.','{office}','{tense}','{3,5}'],
-        [null,'복식호흡 3분','편하게 누워서 배 위에 손을 올려보세요.','{home}','{lethargic}','{3,5}'],
-        [null,'주위에서 빨간 물체 3개 찾아보기','지금 있는 공간에서 빨간색 물체를 세 개 찾아보세요.','{home}','{lethargic}','{1}'],
-        [null,'컵을 두 손으로 감싸고 온기 느끼기','따뜻한 컵이 있다면 두 손으로 감싸보세요.','{cafe}','{calm,anxious}','{1}'],
-        [null,'주변 소리 3개 세어보기','눈을 감고 지금 들리는 소리를 하나씩 세어보세요.','{cafe}','{anxious}','{3,5}'],
-        [null,'하늘 올려다보고 구름 관찰하기','잠깐 멈춰서 하늘을 올려다보세요.','{outside}','{calm}','{1,3}'],
-        [null,'손가락 하나씩 접으며 다섯까지 세기','한 손을 펴고 손가락을 하나씩 천천히 접으며 다섯까지 세어보세요.','{moving}','{anxious,confused}','{1}'],
-        [null,'감사한 것 하나 떠올리기','지금 이 순간 감사한 것 하나만 떠올려보세요.','{home}','{joy,grateful}','{1,3}'],
-        [null,'눈 감고 호흡 세기','눈을 감고 들숨과 날숨을 하나씩 세어보세요. 열까지 세면 다시 처음부터.','{home}','{confused,fear}','{3,5}'],
-      ];
-      for (const m of seedMethods) {
-        await client.query('INSERT INTO noting_methods (room_id,name,guide,places,emotions,times) VALUES ($1,$2,$3,$4,$5,$6)', m);
-      }
-      console.log('Seed data inserted.');
+    // Upsert rooms with latest data
+    const seedRooms = [
+      [101,'1F','감정 층','작아지는 나의 방','누군가의 하루가 눈부셔 보이는 순간','{"emotions":["anxious","shrunk"]}','[{"name":"화면 내려놓기","guide":"화면을 내려놓고, 눈을 감아보세요. 지금 내 안에서 어떤 감각이 느껴지나요."},{"name":"그 느낌 바라보기","guide":"작아지는 느낌이 어디에서 오는지, 판단하지 말고 그냥 바라봐보세요."},{"name":"한 문장 노팅","guide":"지금 떠오르는 것을 한 문장으로 적어보세요. 바꾸려 하지 않아도 괜찮아요."}]'],
+      [102,'1F','감정 층','발바닥으로 돌아오는 방','마음이 어딘가로 빠르게 달아나는 순간','{"emotions":["anxious","tense"]}','[{"name":"발바닥 착지","guide":"두 발이 바닥에 닿아 있는 걸 느껴보세요. 발바닥의 감각에 집중합니다."},{"name":"세 번 내쉬기","guide":"코로 4초 들이쉬고, 잠깐 멈추고, 입으로 6초 내쉬세요. 세 번."},{"name":"한 문장 노팅","guide":"지금 떠오르는 것을 한 문장으로 적어보세요."}]'],
+      [103,'1F','감정 층','힘이 들어간 곳의 방','턱을 꽉 깨물고 있었다는 걸 알아차린 순간','{"emotions":["irritated","tense"]}','[{"name":"힘이 간 곳 찾기","guide":"몸 어딘가에 힘이 들어가 있어요. 턱, 주먹, 어깨. 지금 그곳을 찾아보세요."},{"name":"쥐었다 펴기","guide":"두 손을 꽉 쥐고 5초. 그리고 천천히 펴보세요."},{"name":"한 문장 노팅","guide":"지금 떠오르는 것을 한 문장으로 적어보세요."}]'],
+      [104,'1F','감정 층','가라앉는 하루의 방','이유 없이 몸이 무거운 순간','{"emotions":["lethargic","lonely"]}','[{"name":"무거움 인정하기","guide":"오늘은 가라앉는 날이구나, 하고 한 번 인정해보세요."},{"name":"배 위에 손 올리기","guide":"편하게 누워서 배 위에 손을 올려보세요. 올라오고, 내려가고."},{"name":"한 문장 노팅","guide":"지금 떠오르는 것을 한 문장으로 적어보세요."}]'],
+      [105,'1F','감정 층','혼자인 감각의 방','사람들 사이에서 투명해지는 순간','{"emotions":["lonely","shrunk"]}','[{"name":"그 감각 찾기","guide":"혼자인 느낌이 몸 어디에 있는지 찾아보세요."},{"name":"나에게 말 건네기","guide":"조용히 괜찮아를 세 번 속으로 말해보세요."},{"name":"한 문장 노팅","guide":"지금 떠오르는 것을 한 문장으로 적어보세요."}]'],
+      [106,'1F','감정 층','자꾸 떠오르는 얼굴의 방','그 사람 생각이 멈추지 않는 순간','{"emotions":["lonely","irritated"]}','[{"name":"질문 방향 바꾸기","guide":"그 사람은 왜 대신, 나는 어떤 마음으로 보고 있을까."},{"name":"내 상태 알아차리기","guide":"인정받고 싶은 건지, 서운한 건지, 그리운 건지."},{"name":"한 문장 노팅","guide":"지금 떠오르는 것을 한 문장으로. 상대가 아닌 나에 대해."}]'],
+      [107,'1F','감정 층','바꿀 수 없는 것 앞의 방','아무리 해도 달라지지 않는 것 앞에 선 순간','{"emotions":["anxious","confused"]}','[{"name":"구분하기","guide":"지금 이 상황은, 내가 통제할 수 있는가?"},{"name":"인정하고 놓기","guide":"이건 내가 바꿀 수 없구나. 한 번 인정하고 내려놓기."},{"name":"한 문장 노팅","guide":"다음 스텝을 하나 선택해보세요. 그리고 적어보세요."}]'],
+      [108,'1F','감정 층','굳어버린 몸의 방','어딘가 뻣뻣한데 어딘지 모르는 순간','{"emotions":["tense","shrunk"]}','[{"name":"몸 훑어보기","guide":"머리부터 발끝까지 천천히 훑어보세요. 어디에 힘이 들어가 있나요?"},{"name":"어깨 내려놓기","guide":"어깨를 귀까지 올려 3초 유지, 툭 내려놓기. 세 번."},{"name":"한 문장 노팅","guide":"지금 떠오르는 것을 한 문장으로 적어보세요."}]'],
+      [201,'2F','공간 층','흔들리는 칸의 방','지하철 소리 속에서 눈을 감은 순간','{"places":["moving"]}','[{"name":"이어폰 빼기","guide":"지금 들리는 소리를 그냥 들어보세요. 그대로 두는 것."},{"name":"손가락 세기","guide":"손가락을 하나씩 천천히 접으며 다섯까지. 딱 그것만."},{"name":"한 문장 노팅","guide":"지금 떠오르는 것을 한 문장으로 적어보세요."}]'],
+      [202,'2F','공간 층','따뜻한 잔의 방','손 안의 온기가 전부인 순간','{"places":["cafe"]}','[{"name":"온기 느끼기","guide":"따뜻한 컵을 두 손으로 감싸보세요. 손바닥의 온기에 집중."},{"name":"한 모금 맛보기","guide":"한 모금 머금어보세요. 온도, 맛, 향. 조금 더 천천히."},{"name":"한 문장 노팅","guide":"지금 떠오르는 것을 한 문장으로 적어보세요."}]'],
+      [203,'2F','공간 층','숨이 좁아지는 자리의 방','자리에 앉아 있는데 숨이 얕아지는 순간','{"places":["office"]}','[{"name":"눈 굴리기","guide":"눈을 감고 눈동자를 천천히 위아래로. 그게 시작이에요."},{"name":"세 번 깊은 숨","guide":"코로 4초, 멈추고, 입으로 6초. 세 번."},{"name":"한 문장 노팅","guide":"지금 떠오르는 것을 한 문장으로 적어보세요."}]'],
+      [204,'2F','공간 층','멈춘 발걸음의 방','걷다가 문득 발이 멈춘 순간','{"places":["outside"]}','[{"name":"발바닥 느끼기","guide":"발바닥에 전해지는 감각. 딱딱한지, 부드러운지. 지금 여기에 착지."},{"name":"하늘 올려다보기","guide":"잠깐 멈춰서 하늘을 올려다보세요. 구름의 모양, 움직임."},{"name":"한 문장 노팅","guide":"지금 떠오르는 것을 한 문장으로 적어보세요."}]'],
+      [205,'2F','공간 층','이불 속 웅크린 방','이불이 세상의 전부인 순간','{"places":["home"]}','[{"name":"이불 감촉 느끼기","guide":"이불이 피부에 닿는 감촉. 부드러운지, 따뜻한지."},{"name":"배 위에 손","guide":"배 위에 손을 올리고, 올라오고 내려가는 걸 느끼기."},{"name":"한 문장 노팅","guide":"지금 떠오르는 것을 한 문장으로. 나오기 싫어도 괜찮아요."}]'],
+      [206,'2F','공간 층','맛을 잃은 식탁의 방','밥을 먹고 있는데 맛이 사라진 순간','{"places":["home","cafe"]}','[{"name":"첫 한 입 느끼기","guide":"다음 한 입을 천천히. 씹는 소리, 식감, 온도."},{"name":"향 알아차리기","guide":"접시 위 음식의 향을 한 번 맡아보세요."},{"name":"한 문장 노팅","guide":"오늘 식사에서 가장 기억나는 감각을 한 문장으로."}]'],
+      [207,'2F','공간 층','거울 앞에 멈춘 방','거울 속 나를 오래 들여다보게 되는 순간','{"places":["home"]}','[{"name":"판단 멈추기","guide":"좋다 나쁘다 없이 그냥 바라봐보세요. 3초간."},{"name":"한 단어로 표현하기","guide":"지금 어떤 마음으로 나를 보고 있을까? 단어 하나만."},{"name":"한 문장 노팅","guide":"그 단어를 포함해서 한 문장을 적어보세요."}]'],
+      [301,'3F','시간 층','잠들지 못하는 새벽의 방','천장만 보이는 새벽 3시','{"times":[1,3]}','[{"name":"생각 흘려보내기","guide":"머릿속 생각을 구름이라고 상상해보세요. 지나가는 걸 지켜봐보세요."},{"name":"호흡 세기","guide":"들숨과 날숨을 하나씩 세기. 열까지 세면 다시 처음부터."},{"name":"한 문장 노팅","guide":"지금 떠오르는 것을 한 문장으로. 잠이 안 와도 괜찮아요."}]'],
+      [302,'3F','시간 층','무거운 발걸음의 방','출근길, 발이 바닥에 붙는 순간','{"times":[1]}','[{"name":"한 발씩 착지","guide":"발바닥이 땅에 닿는 감각. 한 발, 한 발. 지금 여기에 착지."},{"name":"세 가지 소리","guide":"이어폰을 빼고, 들리는 소리를 세 가지만."},{"name":"한 문장 노팅","guide":"지금 떠오르는 것을 한 문장으로 적어보세요."}]'],
+      [303,'3F','시간 층','멈추지 않는 머릿속의 방','잠들기 전, 생각이 생각을 부르는 순간','{"times":[3,5]}','[{"name":"감사 하나","guide":"오늘 감사한 것 하나만. 작은 것 하나면 충분합니다."},{"name":"몸 이완하기","guide":"발끝부터 머리까지 힘을 빼보세요. 이불의 감촉, 베개의 온도."},{"name":"한 문장 노팅","guide":"오늘 하루를 한 문장으로 마무리해보세요."}]'],
+      [304,'3F','시간 층','끝나버린 하루의 방','퇴근길, 오늘이 통째로 흘러간 순간','{"times":[1,3]}','[{"name":"좋았던 감각 하나","guide":"아주 작아도 괜찮아요. 오늘 좋았던 감각 하나."},{"name":"바람 느끼기","guide":"얼굴에 닿는 바람. 방향, 온도. 알아차려보는 것."},{"name":"한 문장 노팅","guide":"지금 떠오르는 것을 한 문장으로 적어보세요."}]'],
+      [305,'3F','시간 층','텅 빈 오후의 방','아무 계획 없이 시간이 흐르는 순간','{"times":[3,5]}','[{"name":"아무것도 안 하기","guide":"1분간 아무것도 하지 않아보세요. 그냥 있어보세요."},{"name":"감각 하나 찾기","guide":"가장 먼저 느껴지는 감각 하나. 소리, 빛, 온도, 촉감."},{"name":"한 문장 노팅","guide":"지금 떠오르는 것을 한 문장으로 적어보세요."}]'],
+      [306,'3F','시간 층','나른한 오후의 방','점심 후, 몸과 마음이 함께 늘어지는 순간','{"times":[1]}','[{"name":"초록색 세 가지","guide":"초록색을 세 가지 찾아보세요. 찾는 동안 잠시 고요해져요."},{"name":"어깨 내려놓기","guide":"어깨가 올라가 있다면 살짝 내려놓아보세요."},{"name":"한 문장 노팅","guide":"지금 떠오르는 것을 한 문장으로 적어보세요."}]'],
+      [307,'3F','시간 층','다시 시작되는 아침의 방','월요일, 또 한 주 앞에 선 순간','{"times":[1,3]}','[{"name":"세 번 깊은 숨","guide":"코로 4초, 멈추고, 입으로 6초. 한 주 시작 전에, 잠시."},{"name":"내 상태 한 단어","guide":"지금 마음 상태를 단어 하나로. 바꾸려 하지 않아도 괜찮아요."},{"name":"한 문장 노팅","guide":"그 단어를 포함해서 한 문장을. 알아차리는 것이 시작이에요."}]'],
+    ];
+    for (const r of seedRooms) {
+      await client.query(
+        `INSERT INTO rooms (id,floor,theme,title,description,conditions,steps) VALUES ($1,$2,$3,$4,$5,$6,$7)
+         ON CONFLICT (id) DO UPDATE SET floor=$2, theme=$3, title=$4, description=$5, conditions=$6, steps=$7, updated_at=NOW()`,
+        r
+      );
     }
+    console.log('Rooms synced.');
 
     dbInitialized = true;
     console.log('Database tables initialized.');
@@ -427,6 +427,28 @@ app.get('/api/stats', authenticate, async (req, res) => {
 });
 
 // ========================================
+// Public API — 방 데이터 (앱에서 사용)
+// ========================================
+
+app.get('/api/rooms', async (req, res) => {
+  try {
+    const rooms = await pool.query('SELECT * FROM rooms WHERE is_active = true ORDER BY id');
+    res.json({ success: true, data: rooms.rows });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.get('/api/methods', async (req, res) => {
+  try {
+    const methods = await pool.query('SELECT * FROM noting_methods WHERE is_active = true ORDER BY id');
+    res.json({ success: true, data: methods.rows });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ========================================
 // Admin API Routes
 // ========================================
 
@@ -446,11 +468,11 @@ app.get('/api/admin/rooms', async (req, res) => {
 // PUT /api/admin/rooms/:id - 방 수정
 app.put('/api/admin/rooms/:id', async (req, res) => {
   try {
-    const { title, description, floor, theme, conditions, is_active } = req.body;
+    const { title, description, floor, theme, conditions, steps, is_active } = req.body;
     const result = await pool.query(
-      `UPDATE rooms SET title=$1, description=$2, floor=$3, theme=$4, conditions=$5, is_active=$6, updated_at=NOW()
-       WHERE id=$7 RETURNING *`,
-      [title, description, floor, theme, JSON.stringify(conditions), is_active, req.params.id]
+      `UPDATE rooms SET title=$1, description=$2, floor=$3, theme=$4, conditions=$5, steps=$6, is_active=$7, updated_at=NOW()
+       WHERE id=$8 RETURNING *`,
+      [title, description, floor, theme, JSON.stringify(conditions), JSON.stringify(steps || []), is_active, req.params.id]
     );
     if (result.rows.length === 0) return res.status(404).json({ success: false, message: 'Room not found' });
     res.json({ success: true, data: result.rows[0] });
@@ -462,10 +484,10 @@ app.put('/api/admin/rooms/:id', async (req, res) => {
 // POST /api/admin/rooms - 새 방 추가
 app.post('/api/admin/rooms', async (req, res) => {
   try {
-    const { id, title, description, floor, theme, conditions } = req.body;
+    const { id, title, description, floor, theme, conditions, steps } = req.body;
     const result = await pool.query(
-      'INSERT INTO rooms (id,floor,theme,title,description,conditions) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
-      [id, floor, theme, title, description, JSON.stringify(conditions || {})]
+      'INSERT INTO rooms (id,floor,theme,title,description,conditions,steps) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
+      [id, floor, theme, title, description, JSON.stringify(conditions || {}), JSON.stringify(steps || [])]
     );
     res.status(201).json({ success: true, data: result.rows[0] });
   } catch (err) {
