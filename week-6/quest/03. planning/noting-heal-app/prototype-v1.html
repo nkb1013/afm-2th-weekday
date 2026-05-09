@@ -418,7 +418,7 @@
       return TIME_ROOM_MAP[timeBand] || 305;
     }
 
-    function recommendFloor(placeKey, emotionKey, timeKey) {
+    function recommendFloor(placeKey, emotionKey) {
       const now = new Date();
       const timeBand = getTimeBand(now);
       const moodScore = MOOD_SCORES[emotionKey] || 1;
@@ -639,7 +639,7 @@
       const [activeTab, setActiveTab] = useState('building');
       const [records, setRecords] = useState(loadGuest('records', []));
       const [emotions, setEmotions] = useState(EMOTIONS);
-      const [checkinData, setCheckinData] = useState({ place: null, emotion: null, time: null });
+      const [checkinData, setCheckinData] = useState({ place: null, emotion: null });
       const [assignedRoom, setAssignedRoom] = useState(null);
       const [assignedMethod, setAssignedMethod] = useState(null);
       const [pendingRecord, setPendingRecord] = useState(null);
@@ -732,8 +732,8 @@
       const [skippedRooms, setSkippedRooms] = useState([]);
 
       const startNoting = useCallback(() => {
-        const { place, emotion, time } = checkinData;
-        const floor = recommendFloor(place, emotion, time);
+        const { place, emotion } = checkinData;
+        const floor = recommendFloor(place, emotion);
         setRecommendedFloor(floor);
         setCurrentFloor(floor);
         setSkippedRooms([]);
@@ -1027,13 +1027,12 @@
       const [customInput, setCustomInput] = useState('');
       const [showCustom, setShowCustom] = useState(false);
 
-      const { place, emotion, time } = checkinData;
-      const allSelected = place && emotion && time;
+      const { place, emotion } = checkinData;
+      const allSelected = place && emotion;
       const customEmotions = emotions.filter(e => e.key.startsWith('custom_'));
 
       const selectPlace = (key) => setCheckinData(prev => ({ ...prev, place: key }));
       const selectEmotion = (key) => setCheckinData(prev => ({ ...prev, emotion: key }));
-      const selectTime = (key) => setCheckinData(prev => ({ ...prev, time: key }));
 
       const handleAddCustom = () => {
         if (customInput.trim()) {
@@ -1140,23 +1139,6 @@
               </>
             )}
 
-            {/* Step 3: Time — appears after emotion is selected */}
-            {place && emotion && (
-              <>
-                <DottedDivider />
-                <div className="fade-in mb-2">
-                  <p className="text-[11px] font-medium uppercase tracking-[0.2em] mb-4" style={{ color: COLORS.navy }}>
-                    지금 머무를 수 있는 시간은?
-                  </p>
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {TIMES.map(t => (
-                      <ChoicePill key={t.key} label={t.label} selected={time === t.key} onClick={() => selectTime(t.key)} />
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-
             {/* Submit — appears after all selected */}
             {allSelected && (
               <div className="mt-10 fade-in">
@@ -1241,7 +1223,7 @@
               <NavyButton onClick={() => setScreen('corridor')} className="px-10 w-full">
                 이 층으로 들어가기
               </NavyButton>
-              <button onClick={() => { setCheckinData({ place: null, emotion: null, time: null }); setScreen('building'); setActiveTab('building'); }}
+              <button onClick={() => { setCheckinData({ place: null, emotion: null }); setScreen('building'); setActiveTab('building'); }}
                 className="w-full py-3 rounded-lg text-sm border"
                 style={{ borderColor: COLORS.navy, color: COLORS.navy }}>
                 나가기
@@ -1515,7 +1497,6 @@
           roomId: assignedRoom?.id || 101,
           emotion: checkinData.emotion,
           place: checkinData.place,
-          time: checkinData.time,
           method: assignedMethod?.name || '',
           text: text.trim(),
           createdAt: new Date(),
@@ -1530,7 +1511,7 @@
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
               body: JSON.stringify({
                 room_id: record.roomId, emotion: record.emotion, place: record.place,
-                time_minutes: record.time, noting_method: record.method, noting_text: record.text,
+                time_minutes: 0, noting_method: record.method, noting_text: record.text,
               }),
             });
           } catch (e) { console.error('Failed to save:', e); }
@@ -1776,7 +1757,7 @@
       }, []);
 
       const goBuilding = () => {
-        setCheckinData({ place: null, emotion: null, time: null });
+        setCheckinData({ place: null, emotion: null });
         setActiveTab('building');
         setScreen('building');
       };
@@ -2717,7 +2698,7 @@
 
       const handleTabClick = (key) => {
         setActiveTab(key);
-        if (key === 'building') setCheckinData({ place: null, emotion: null, time: null });
+        if (key === 'building') setCheckinData({ place: null, emotion: null });
         setScreen('building');
       };
 
