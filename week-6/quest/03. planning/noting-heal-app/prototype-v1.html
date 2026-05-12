@@ -1163,8 +1163,9 @@
                 <p className="font-playfair text-xl font-semibold" style={{ color: COLORS.navy }}>
                   노팅힐에 오신 것을 환영합니다
                 </p>
-                {welcomeSub && welcomeSub2 && (
-                  <p className="text-sm mt-4 fade-in" style={{ color: COLORS.textLight }}>
+                {welcomeSub2 && (
+                  <p className="text-sm mt-4 transition-opacity duration-700"
+                    style={{ color: COLORS.textLight, opacity: welcomeSub ? 1 : 0 }}>
                     {welcomeSub2}
                   </p>
                 )}
