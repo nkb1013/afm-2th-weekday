@@ -2146,8 +2146,9 @@
     // ========================================
 
     function InsightTab() {
-      const { roomVisits, lastVisitDates, records, setScreen, setAssignedRoom, isResident, roomData } = useApp();
+      const { roomVisits, lastVisitDates, records, setScreen, setAssignedRoom, isResident, roomData, roomNotes } = useApp();
       const [period, setPeriod] = useState(30);
+      const [showReview, setShowReview] = useState(false);
 
       if (!isResident) {
         return (
@@ -2255,15 +2256,160 @@
         );
       }
 
+      // 반복 패턴 인사이트 생성
+      const patternInsight = useMemo(() => {
+        if (totalVisits < 3) return null;
+        const insights = [];
+
+        // 가장 자주 가는 방
+        if (top3.length > 0 && top3[0].visits >= 3) {
+          insights.push(`${top3[0].id}호 ${top3[0].title}을 ${top3[0].visits}번 다녀오셨어요. 자주 만나는 마음이네요.`);
+        }
+
+        // 시간대 패턴
+        if (peakTime && peakTime[1] >= 3) {
+          const timeLabel = peakTime[0].split(' ')[0];
+          insights.push(`주로 ${timeLabel}에 문을 두드리시네요.`);
+        }
+
+        // 층 편중
+        if (floorInsight) insights.push(floorInsight);
+
+        // 새벽 노팅 증가
+        const dawnCount = timeSlots['밤 (0-6)'] || 0;
+        if (dawnCount >= 2) insights.push('새벽 노팅이 늘어나고 있어요.');
+
+        return insights.length > 0 ? insights[Math.floor(Math.random() * insights.length)] : null;
+      }, [top3, peakTime, floorInsight, totalVisits, timeSlots]);
+
+      // 한 달 회고 데이터
+      const reviewData = useMemo(() => {
+        const allNotes = [];
+        Object.entries(roomNotes).forEach(([roomId, notes]) => {
+          notes.forEach(n => {
+            const room = roomData[roomId] || ROOM_DATA[roomId];
+            allNotes.push({ ...n, roomId, roomTitle: room?.title || roomId + '호' });
+          });
+        });
+        // records에서도 한 문장 노팅 수집
+        records.forEach(r => {
+          if (r.text) {
+            const room = roomData[r.roomId] || ROOM_DATA[r.roomId];
+            allNotes.push({
+              date: new Date(r.createdAt).toISOString().split('T')[0],
+              content: r.text,
+              roomId: r.roomId,
+              roomTitle: room?.title || r.roomId + '호',
+            });
+          }
+        });
+        allNotes.sort((a, b) => b.date.localeCompare(a.date));
+
+        // 처음 만난 마음 (visits === 1인 방들)
+        const firstMeets = visitedEntries.filter(r => r.visits === 1);
+
+        return { allNotes: allNotes.slice(0, 20), firstMeets };
+      }, [roomNotes, records, visitedEntries, roomData]);
+
+      const monthNames = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+
       return (
         <div className="min-h-screen pb-24 px-6 pt-10" style={{ backgroundColor: COLORS.bg }}>
           <div className="max-w-md mx-auto">
             <h1 className="font-playfair text-2xl font-semibold mb-2 fade-in" style={{ color: COLORS.navy }}>
               이번 달의 마음 풍경
             </h1>
-            <p className="text-sm mb-6 fade-in fade-in-d1" style={{ color: COLORS.textLight }}>
+            <p className="text-sm mb-4 fade-in fade-in-d1" style={{ color: COLORS.textLight }}>
               이번 달, {visitedEntries.length}개의 방에 {totalVisits}번 머무셨어요
             </p>
+
+            {/* 반복 패턴 인사이트 */}
+            {patternInsight && (
+              <div className="mb-6 rounded-xl p-4 fade-in fade-in-d1" style={{ backgroundColor: 'rgba(31,58,96,0.04)', border: '1px solid rgba(31,58,96,0.08)' }}>
+                <p className="text-sm italic leading-relaxed" style={{ color: COLORS.navy }}>
+                  "{patternInsight}"
+                </p>
+              </div>
+            )}
+
+            {/* 한 달 회고 진입점 */}
+            {totalVisits >= 3 && (
+              <button onClick={() => setShowReview(true)}
+                className="w-full mb-8 py-3 rounded-xl text-sm border fade-in fade-in-d1"
+                style={{ borderColor: COLORS.gold, color: COLORS.navy }}>
+                {monthNames[new Date().getMonth()]}의 회고 보기 →
+              </button>
+            )}
+
+            {/* 한 달 회고 모달 */}
+            {showReview && (
+              <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 modal-overlay"
+                onClick={() => setShowReview(false)}>
+                <div className="rounded-xl w-full max-w-sm max-h-[85vh] overflow-y-auto p-6 modal-content"
+                  style={{ backgroundColor: COLORS.bg }}
+                  onClick={e => e.stopPropagation()}>
+
+                  <div className="text-center mb-6">
+                    <p className="text-[10px] tracking-widest mb-1" style={{ color: COLORS.textLight }}>MONTHLY REVIEW</p>
+                    <h2 className="font-playfair text-xl font-semibold" style={{ color: COLORS.navy }}>
+                      {new Date().getFullYear()}년 {monthNames[new Date().getMonth()]} 회고
+                    </h2>
+                  </div>
+
+                  {/* 가장 자주 머문 방 */}
+                  {top3.length > 0 && (
+                    <div className="mb-6">
+                      <p className="text-[10px] tracking-wider mb-3" style={{ color: COLORS.textLight }}>가장 자주 머문 방</p>
+                      {top3.map((room, i) => (
+                        <div key={room.id} className="flex items-center gap-2 mb-2">
+                          <span className="text-lg font-bold w-6" style={{ color: i === 0 ? COLORS.gold : COLORS.navy }}>{i+1}</span>
+                          <span className="text-sm" style={{ color: COLORS.navy }}>{room.id}호 {room.title}</span>
+                          <span className="text-xs ml-auto" style={{ color: COLORS.textLight }}>x{room.visits}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* 처음 만난 마음 */}
+                  {reviewData.firstMeets.length > 0 && (
+                    <div className="mb-6">
+                      <p className="text-[10px] tracking-wider mb-3" style={{ color: COLORS.textLight }}>처음 만난 마음</p>
+                      <div className="flex flex-wrap gap-1">
+                        {reviewData.firstMeets.map(r => (
+                          <span key={r.id} className="text-xs px-2 py-1 rounded-full border"
+                            style={{ borderColor: COLORS.gold, color: COLORS.navy }}>
+                            {r.id}호 {r.title}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 남긴 한 줄들 */}
+                  {reviewData.allNotes.length > 0 && (
+                    <div className="mb-6">
+                      <p className="text-[10px] tracking-wider mb-3" style={{ color: COLORS.textLight }}>남긴 한 줄들</p>
+                      <div className="space-y-3">
+                        {reviewData.allNotes.slice(0, 10).map((note, i) => (
+                          <div key={i} className="border-l-2 pl-3 py-1" style={{ borderColor: 'rgba(31,58,96,0.15)' }}>
+                            <p className="font-caveat text-base" style={{ color: COLORS.navy }}>"{note.content}"</p>
+                            <p className="text-[9px] mt-1" style={{ color: COLORS.textLight }}>
+                              {note.date} · {note.roomTitle}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <button onClick={() => setShowReview(false)}
+                    className="w-full py-3 rounded-lg text-sm border mt-2"
+                    style={{ borderColor: COLORS.navy, color: COLORS.navy }}>
+                    닫기
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* 섹션 1: Top 3 */}
             <div className="mb-8 fade-in fade-in-d1">
