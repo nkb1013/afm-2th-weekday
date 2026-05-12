@@ -1043,39 +1043,32 @@
     // Screen 4: Self Check-in
     // ========================================
 
-    function CheckinScreen() {
+    function CheckinScreen({ skipWelcome = false }) {
       const { checkinData, setCheckinData, startNoting, emotions, addCustomEmotion, isResident, residentNumber, notingCount, setScreen, setActiveTab, assignedRoom } = useApp();
-      const [step, setStep] = useState(0); // 0=welcome, 1=place, 2=mood, 3=key-moment
+      const [step, setStep] = useState(skipWelcome ? 1 : 0); // 0=welcome, 1=place, 2=mood-tone, 3=mood-word, 4=key-moment
       const [fade, setFade] = useState('in'); // in | out
       const [optionsVisible, setOptionsVisible] = useState(false);
       const [customInput, setCustomInput] = useState('');
       const [showCustom, setShowCustom] = useState(false);
+      const [moodTone, setMoodTone] = useState(null); // 'heavy' | 'light'
       const customEmotions = emotions.filter(e => e.key.startsWith('custom_'));
 
-      // Step 1: 환영 메시지 자동 전환
+      // Step 0: 환영 → step 0.5(변주) → step 1
+      const [welcomeSub, setWelcomeSub] = useState(false);
       useEffect(() => {
         if (step === 0) {
-          const t = setTimeout(() => goToStep(1), 1500);
-          return () => clearTimeout(t);
+          const t1 = setTimeout(() => setWelcomeSub(true), 1200);
+          const t2 = setTimeout(() => goToStep(1), 2500);
+          return () => { clearTimeout(t1); clearTimeout(t2); };
         }
       }, [step]);
 
-      // Step 4: 키 발급 후 자동 전환
-      useEffect(() => {
-        if (step === 3) {
-          const t = setTimeout(() => {
-            setFade('out');
-            setTimeout(() => setScreen('room-assign'), 500);
-          }, 2500);
-          return () => clearTimeout(t);
-        }
-      }, [step]);
 
       // 옵션 지연 등장
       useEffect(() => {
-        if (step === 1 || step === 2) {
+        if (step >= 1 && step <= 3) {
           setOptionsVisible(false);
-          const t = setTimeout(() => setOptionsVisible(true), 300);
+          const t = setTimeout(() => setOptionsVisible(true), 400);
           return () => clearTimeout(t);
         }
       }, [step]);
@@ -1090,19 +1083,20 @@
         setTimeout(() => goToStep(2), 300);
       };
 
-      const selectEmotion = (key) => {
-        setCheckinData(prev => ({ ...prev, emotion: key }));
-        // startNoting을 호출하면 assignedRoom이 설정됨
-        setTimeout(() => {
-          startNoting();
-          // startNoting이 screen을 key-moment로 바꾸지 않으니 여기서 step 전환
-        }, 300);
+      const selectMoodTone = (tone) => {
+        setMoodTone(tone);
+        setTimeout(() => goToStep(3), 300);
       };
 
-      // startNoting 후 assignedRoom이 설정되면 step 3으로
+      const selectEmotion = (key) => {
+        setCheckinData(prev => ({ ...prev, emotion: key }));
+        setTimeout(() => startNoting(), 300);
+      };
+
+      // startNoting 후 assignedRoom이 설정되면 step 4(키)로
       useEffect(() => {
-        if (assignedRoom && step === 2) {
-          goToStep(3);
+        if (assignedRoom && step === 3) {
+          goToStep(4);
         }
       }, [assignedRoom]);
 
@@ -1116,14 +1110,13 @@
       };
 
       // 환영 메시지 변주
-      const welcomeMsg = useMemo(() => {
+      const welcomeSub2 = useMemo(() => {
         const h = new Date().getHours();
-        if (notingCount === 0) return '노팅힐에 오신 것을 환영합니다';
         if (h >= 0 && h < 5) return '이 시간에 오셨네요';
         if (h >= 6 && h < 10) return '좋은 아침이에요';
         if (h >= 22) return '조용한 밤이네요';
         if (notingCount >= 3) return '다시 오셨네요';
-        return '노팅힐에 오신 것을 환영합니다';
+        return null;
       }, [notingCount]);
 
       // 키 발급 안내 카피
@@ -1135,13 +1128,19 @@
 
       const fadeClass = fade === 'in' ? 'fade-in' : 'screen-fade-out';
 
+      // 하단 시각 디테일
+      const bottomDetail = useMemo(() => {
+        const details = ['✦', '◇', '·  ·  ·', '〰', '○'];
+        return details[step % details.length];
+      }, [step]);
+
       return (
-        <div className="min-h-screen flex flex-col items-center justify-center px-6" style={{ backgroundColor: COLORS.bg }}>
+        <div className="min-h-screen flex flex-col px-6" style={{ backgroundColor: COLORS.bg }}>
           {/* 뒤로 가기 */}
-          {step > 0 && step < 3 && (
+          {step > 0 && step < 4 && (
             <button onClick={() => {
               if (step === 1) { setScreen('building'); setActiveTab('building'); setCheckinData({ place: null, emotion: null }); }
-              else goToStep(step - 1);
+              else { if (step === 3) setMoodTone(null); goToStep(step - 1); }
             }}
               className="fixed top-6 left-5 p-2 z-10" style={{ color: COLORS.textLight }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -1150,88 +1149,138 @@
             </button>
           )}
 
-          <div className={`max-w-md w-full text-center ${fadeClass}`} key={step}>
+          {/* Grid: top 25% + center 50% + bottom 25% */}
+          <div className="flex-1" style={{ minHeight: '25vh' }} />
+
+          <div className={`max-w-md w-full text-center mx-auto ${fadeClass}`} key={step}>
 
             {/* Step 0: 환영 */}
             {step === 0 && (
-              <p className="font-playfair text-xl font-semibold" style={{ color: COLORS.navy }}>
-                {welcomeMsg}
-              </p>
+              <div>
+                <p className="text-[12px] tracking-[0.2em] mb-10" style={{ color: '#7A8B9E', textTransform: 'uppercase' }}>
+                  NOTING HEAL · WELCOME
+                </p>
+                <p className="font-playfair text-xl font-semibold" style={{ color: COLORS.navy }}>
+                  노팅힐에 오신 것을 환영합니다
+                </p>
+                {welcomeSub && welcomeSub2 && (
+                  <p className="text-sm mt-4 fade-in" style={{ color: COLORS.textLight }}>
+                    {welcomeSub2}
+                  </p>
+                )}
+              </div>
             )}
 
             {/* Step 1: 공간 */}
             {step === 1 && (
               <div>
+                <p className="text-[12px] tracking-[0.2em] mb-2" style={{ color: '#7A8B9E', textTransform: 'uppercase' }}>
+                  NOTING HEAL · CHECK-IN
+                </p>
+                <div className="flex justify-center gap-3 mb-10">
+                  <div className="rounded-full" style={{ width: 5, height: 5, backgroundColor: '#2A5A8C' }} />
+                  <div className="rounded-full" style={{ width: 5, height: 5, backgroundColor: '#B5C0D0' }} />
+                  <div className="rounded-full" style={{ width: 5, height: 5, backgroundColor: '#B5C0D0' }} />
+                </div>
                 <p className="font-playfair text-xl font-semibold mb-10" style={{ color: COLORS.navy }}>
                   지금, 어디 계세요?
                 </p>
-                {optionsVisible && (
-                  <div className="flex flex-wrap justify-center gap-3 fade-in">
-                    {PLACES.map(p => (
-                      <ChoicePill key={p.key} label={p.label} selected={checkinData.place === p.key} onClick={() => selectPlace(p.key)} />
-                    ))}
-                  </div>
-                )}
+                <div className="flex flex-wrap justify-center gap-3 transition-opacity duration-500"
+                  style={{ opacity: optionsVisible ? 1 : 0 }}>
+                  {PLACES.map(p => (
+                    <ChoicePill key={p.key} label={p.label} selected={checkinData.place === p.key} onClick={() => selectPlace(p.key)} />
+                  ))}
+                </div>
               </div>
             )}
 
-            {/* Step 2: 마음 */}
+            {/* Step 2: 마음 톤 */}
             {step === 2 && (
               <div>
-                <p className="font-playfair text-xl font-semibold mb-10" style={{ color: COLORS.navy }}>
-                  지금, 마음은 어떠세요?
+                <p className="text-[12px] tracking-[0.2em] mb-2" style={{ color: '#7A8B9E', textTransform: 'uppercase' }}>
+                  NOTING HEAL · CHECK-IN
                 </p>
-                {optionsVisible && (
-                  <div className="fade-in">
-                    <p className="text-[10px] tracking-wide mb-2" style={{ color: COLORS.textLight }}>마음이 무거울 때</p>
-                    <div className="flex flex-wrap justify-center gap-2 mb-5">
-                      {EMOTIONS_HEAVY.map(em => (
-                        <ChoicePill key={em.key} label={em.label} selected={checkinData.emotion === em.key} onClick={() => selectEmotion(em.key)} />
-                      ))}
-                    </div>
-
-                    <p className="text-[10px] tracking-wide mb-2" style={{ color: COLORS.textLight }}>마음이 가벼울 때</p>
-                    <div className="flex flex-wrap justify-center gap-2 mb-4">
-                      {EMOTIONS_LIGHT.map(em => (
-                        <ChoicePill key={em.key} label={em.label} selected={checkinData.emotion === em.key} onClick={() => selectEmotion(em.key)} />
-                      ))}
-                    </div>
-
-                    <div className="flex flex-wrap justify-center gap-2">
-                      {customEmotions.map(em => (
-                        <ChoicePill key={em.key} label={em.label} selected={checkinData.emotion === em.key} onClick={() => selectEmotion(em.key)} />
-                      ))}
-                      <button
-                        onClick={() => setShowCustom(!showCustom)}
-                        className="px-3 py-2 rounded-full text-sm border border-dashed pill-tap"
-                        style={{ borderColor: COLORS.navy, color: COLORS.navy }}
-                      >
-                        + 직접 추가
-                      </button>
-                    </div>
-                    {showCustom && (
-                      <div className="flex gap-2 mt-4 justify-center">
-                        <input
-                          value={customInput}
-                          onChange={e => setCustomInput(e.target.value)}
-                          placeholder="감정을 적어주세요"
-                          className="border-b px-2 py-1 text-sm font-caveat w-40"
-                          style={{ backgroundColor: 'transparent', borderColor: COLORS.navy, color: COLORS.navy }}
-                          onKeyDown={e => { if (e.key === 'Enter') handleAddCustom(); }}
-                        />
-                        <button onClick={handleAddCustom} className="text-sm px-3 py-1 rounded" style={{ backgroundColor: COLORS.navy, color: COLORS.cream }}>
-                          추가
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
+                <div className="flex justify-center gap-3 mb-10">
+                  <div className="rounded-full" style={{ width: 5, height: 5, backgroundColor: '#B5C0D0' }} />
+                  <div className="rounded-full" style={{ width: 5, height: 5, backgroundColor: '#2A5A8C' }} />
+                  <div className="rounded-full" style={{ width: 5, height: 5, backgroundColor: '#B5C0D0' }} />
+                </div>
+                <p className="font-playfair text-xl font-semibold mb-10" style={{ color: COLORS.navy }}>
+                  지금, 마음의 결은 어떠세요?
+                </p>
+                <div className="flex flex-col gap-4 items-center transition-opacity duration-500"
+                  style={{ opacity: optionsVisible ? 1 : 0 }}>
+                  <button onClick={() => optionsVisible && selectMoodTone('heavy')}
+                    className="w-full max-w-xs py-4 rounded-xl border text-sm font-medium transition-all pill-tap"
+                    style={{ borderColor: COLORS.navy, color: COLORS.navy }}>
+                    마음이 무거워요
+                  </button>
+                  <button onClick={() => optionsVisible && selectMoodTone('light')}
+                    className="w-full max-w-xs py-4 rounded-xl border text-sm font-medium transition-all pill-tap"
+                    style={{ borderColor: COLORS.navy, color: COLORS.navy }}>
+                    마음이 가벼워요
+                  </button>
+                </div>
               </div>
             )}
 
-            {/* Step 3: 키 발급 모먼트 */}
-            {step === 3 && assignedRoom && (
+            {/* Step 3: 마음 단어 */}
+            {step === 3 && (
               <div>
+                <p className="text-[12px] tracking-[0.2em] mb-2" style={{ color: '#7A8B9E', textTransform: 'uppercase' }}>
+                  NOTING HEAL · CHECK-IN
+                </p>
+                <div className="flex justify-center gap-3 mb-10">
+                  <div className="rounded-full" style={{ width: 5, height: 5, backgroundColor: '#B5C0D0' }} />
+                  <div className="rounded-full" style={{ width: 5, height: 5, backgroundColor: '#B5C0D0' }} />
+                  <div className="rounded-full" style={{ width: 5, height: 5, backgroundColor: '#2A5A8C' }} />
+                </div>
+                <p className="font-playfair text-xl font-semibold mb-10" style={{ color: COLORS.navy }}>
+                  {moodTone === 'heavy' ? '그 무거움, 어떤 모양이에요?' : '그 가벼움, 어떤 모양이에요?'}
+                </p>
+                <div className="transition-opacity duration-500" style={{ opacity: optionsVisible ? 1 : 0 }}>
+                  <div className="flex flex-wrap justify-center gap-2 mb-4">
+                    {(moodTone === 'heavy' ? EMOTIONS_HEAVY : EMOTIONS_LIGHT).map(em => (
+                      <ChoicePill key={em.key} label={em.label} selected={checkinData.emotion === em.key} onClick={() => optionsVisible && selectEmotion(em.key)} />
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {customEmotions.map(em => (
+                      <ChoicePill key={em.key} label={em.label} selected={checkinData.emotion === em.key} onClick={() => optionsVisible && selectEmotion(em.key)} />
+                    ))}
+                    <button
+                      onClick={() => optionsVisible && setShowCustom(!showCustom)}
+                      className="px-3 py-2 rounded-full text-sm border border-dashed pill-tap"
+                      style={{ borderColor: COLORS.navy, color: COLORS.navy }}
+                    >
+                      + 직접 추가
+                    </button>
+                  </div>
+                  {showCustom && (
+                    <div className="flex gap-2 mt-4 justify-center">
+                      <input
+                        value={customInput}
+                        onChange={e => setCustomInput(e.target.value)}
+                        placeholder="감정을 적어주세요"
+                        className="border-b px-2 py-1 text-sm font-caveat w-40"
+                        style={{ backgroundColor: 'transparent', borderColor: COLORS.navy, color: COLORS.navy }}
+                        onKeyDown={e => { if (e.key === 'Enter') handleAddCustom(); }}
+                      />
+                      <button onClick={handleAddCustom} className="text-sm px-3 py-1 rounded" style={{ backgroundColor: COLORS.navy, color: COLORS.cream }}>
+                        추가
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Step 4: 키 발급 모먼트 */}
+            {step === 4 && assignedRoom && (
+              <div>
+                <p className="text-[12px] tracking-[0.2em] mb-10" style={{ color: '#7A8B9E', textTransform: 'uppercase' }}>
+                  NOTING HEAL · YOUR ROOM
+                </p>
                 <p className="text-sm mb-8 fade-in" style={{ color: COLORS.textLight }}>
                   오늘의 방을 준비했어요
                 </p>
@@ -1241,11 +1290,21 @@
                     Room {assignedRoom.id} · {assignedRoom.title}
                   </p>
                 </div>
-                <p className="text-sm fade-in fade-in-d2" style={{ color: 'rgba(31,58,96,0.5)' }}>
+                <p className="text-sm fade-in fade-in-d2 mb-10" style={{ color: 'rgba(31,58,96,0.5)' }}>
                   {guideCopy}
                 </p>
+                <div className="fade-in fade-in-d3">
+                  <NavyButton onClick={() => setScreen('elevator')} className="w-full">
+                    키 받고 이동하기
+                  </NavyButton>
+                </div>
               </div>
             )}
+          </div>
+
+          {/* Bottom breathing space + detail */}
+          <div className="flex-1 flex items-end justify-center pb-12" style={{ minHeight: '20vh' }}>
+            <span className="text-sm" style={{ color: '#B5C0D0' }}>{bottomDetail}</span>
           </div>
         </div>
       );
@@ -1256,6 +1315,45 @@
     // Screen: Elevator
     // ========================================
 
+    // Sound: Elevator chime
+    function playElevatorChime() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const t = ctx.currentTime;
+        const bufSize = ctx.sampleRate * 2;
+        const noiseBuf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+        const data = noiseBuf.getChannelData(0);
+        for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
+        const noise = ctx.createBufferSource();
+        noise.buffer = noiseBuf;
+        const noiseFilter = ctx.createBiquadFilter();
+        noiseFilter.type = 'lowpass';
+        noiseFilter.frequency.setValueAtTime(400, t);
+        noiseFilter.frequency.linearRampToValueAtTime(200, t + 1.5);
+        const noiseGain = ctx.createGain();
+        noiseGain.gain.setValueAtTime(0, t);
+        noiseGain.gain.linearRampToValueAtTime(0.06, t + 0.3);
+        noiseGain.gain.linearRampToValueAtTime(0.03, t + 1.0);
+        noiseGain.gain.linearRampToValueAtTime(0, t + 1.8);
+        noise.connect(noiseFilter);
+        noiseFilter.connect(noiseGain);
+        noiseGain.connect(ctx.destination);
+        noise.start(t);
+        noise.stop(t + 2);
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(659, t + 0.1);
+        gain.gain.setValueAtTime(0, t + 0.1);
+        gain.gain.linearRampToValueAtTime(0.15, t + 0.15);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 1.8);
+        osc.start(t + 0.1);
+        osc.stop(t + 2);
+      } catch(e) {}
+    }
+
     function ElevatorScreen() {
       const { currentFloor, setCurrentFloor, setScreen, setActiveTab, setCheckinData } = useApp();
       const floors = ['3F', '2F', '1F'];
@@ -1263,6 +1361,7 @@
       const [animating, setAnimating] = useState(true);
 
       useEffect(() => {
+        playElevatorChime();
         const t = setTimeout(() => setAnimating(false), 600);
         return () => clearTimeout(t);
       }, []);
@@ -1362,7 +1461,7 @@
       const handleRoomClick = (room) => {
         if (assignedRoom && room.id === assignedRoom.id) {
           setOpeningDoor(room.id);
-          setTimeout(() => setScreen('noting'), 500);
+          setTimeout(() => setScreen('room-assign'), 500);
         }
       };
 
@@ -1453,25 +1552,6 @@
     // ========================================
 
     // ========================================
-    // Sound: Key click (Web Audio API synth)
-    // ========================================
-    function playKeySound() {
-      try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        // 부드러운 "딸칵" — 짧은 클릭 + 잔향
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.frequency.setValueAtTime(800, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(400, ctx.currentTime + 0.08);
-        gain.gain.setValueAtTime(0.3, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
-        osc.type = 'sine';
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.15);
-      } catch(e) {}
-    }
 
     // ========================================
     // Screen: Key Moment (체크인 → 키 발급)
@@ -1527,51 +1607,74 @@
 
 
     function RoomAssignScreen() {
-      const { assignedRoom, assignedMethod, checkinData, setScreen, rerollRoom } = useApp();
+      const { assignedRoom, assignedMethod, checkinData, setScreen, rerollRoom, setCheckinData, setAssignedRoom } = useApp();
+      const [passing, setPassing] = useState(false);
 
       if (!assignedRoom || !assignedMethod) return null;
 
+      const handlePass = () => {
+        setPassing(true);
+        setTimeout(() => {
+          setCheckinData({ place: null, emotion: null });
+          setAssignedRoom(null);
+          setScreen('checkin-reentry');
+        }, 1000);
+      };
+
       return (
-        <div className="min-h-screen pb-24 px-6 flex flex-col items-center justify-center" style={{ backgroundColor: COLORS.bg }}>
+        <div className="min-h-screen pb-24 px-6 flex flex-col items-center justify-center screen-slide-in" style={{ backgroundColor: COLORS.bg }}>
           <div className="max-w-md w-full text-center">
-            {/* Key illustration */}
-            <div className="fade-in mb-6">
+            {/* Label */}
+            <div className="fade-in mb-8">
+              <p className="text-[12px] tracking-[0.2em] mb-2" style={{ color: '#7A8B9E', textTransform: 'uppercase' }}>
+                NOTING HEAL · YOUR ROOM
+              </p>
+              <p className="text-[10px] tracking-wider" style={{ color: COLORS.textLight }}>
+                {assignedRoom.floor} · {assignedRoom.theme}
+              </p>
+            </div>
+
+            {/* Blue door illustration */}
+            <div className="fade-in fade-in-d1 mb-6">
               <img
-                src="/image/noting_heal_key.png"
-                alt="room key"
-                className="w-36 h-36 mx-auto object-contain"
+                src="/image/noting_heal_door.png"
+                alt="room door"
+                className="w-36 h-auto mx-auto"
                 draggable="false"
               />
             </div>
 
-            {/* Floor + Room number */}
-            <div className="fade-in fade-in-d1 mb-2">
-              <p className="text-[10px] tracking-wider mb-1" style={{ color: COLORS.textLight }}>
-                {assignedRoom.floor} · {assignedRoom.theme}
-              </p>
-              <h1 className="font-playfair text-3xl font-bold" style={{ color: COLORS.navy }}>
+            {/* Room info */}
+            <div className="fade-in fade-in-d2 mb-2">
+              <h1 className="font-playfair text-2xl font-bold" style={{ color: COLORS.navy }}>
                 Room {assignedRoom.id}
               </h1>
             </div>
-
-            {/* Room description */}
-            <div className="fade-in fade-in-d2 mb-12">
-              <p className="text-lg leading-relaxed" style={{ color: COLORS.textLight }}>
+            <div className="fade-in fade-in-d2 mb-10">
+              <p className="text-base leading-relaxed" style={{ color: COLORS.textLight }}>
                 {assignedRoom.desc}
               </p>
             </div>
 
-            {/* Enter button */}
-            <div className="fade-in fade-in-d3 space-y-3">
-              <NavyButton onClick={() => setScreen('elevator')} className="w-full">
-                방 열쇠 받기
-              </NavyButton>
-              <button onClick={rerollRoom}
-                className="w-full py-3 rounded-lg text-sm border"
-                style={{ borderColor: COLORS.navy, color: COLORS.navy }}>
-                다른 방으로 갈게요
-              </button>
-            </div>
+            {/* Buttons */}
+            {!passing ? (
+              <div className="fade-in fade-in-d3 space-y-3">
+                <NavyButton onClick={() => setScreen('noting')} className="w-full">
+                  방 문 열기
+                </NavyButton>
+                <button onClick={handlePass}
+                  className="w-full py-3 rounded-lg text-sm border"
+                  style={{ borderColor: COLORS.navy, color: COLORS.navy }}>
+                  마음을 다시 들여다볼게요
+                </button>
+              </div>
+            ) : (
+              <div className="fade-in text-center py-6">
+                <p className="text-sm" style={{ color: COLORS.textLight }}>
+                  천천히 다시 살펴볼게요
+                </p>
+              </div>
+            )}
           </div>
         </div>
       );
@@ -3204,7 +3307,7 @@
       };
 
       // Hide nav on certain screens
-      if (['signup', 'welcome', 'checkin', 'elevator', 'corridor', 'profile'].includes(screen)) return null;
+      if (['signup', 'welcome', 'checkin', 'checkin-reentry', 'elevator', 'corridor', 'profile'].includes(screen)) return null;
       if (screen === 'building' && activeTab === 'building') return null;
 
       return (
@@ -3243,6 +3346,7 @@
       if (screen === 'profile') return <ProfileScreen />;
       if (screen === 'welcome') return <WelcomeScreen />;
       if (screen === 'checkin') return <CheckinScreen />;
+      if (screen === 'checkin-reentry') return <CheckinScreen skipWelcome={true} />;
       if (screen === 'elevator') return <ElevatorScreen />;
       if (screen === 'corridor') return <CorridorScreen />;
       if (screen === 'room-assign') return <><RoomAssignScreen /><BottomNav /></>;
