@@ -2490,7 +2490,7 @@
       }, [reviewData]);
 
       const cardStyle = {
-        width: '100%', aspectRatio: '9/16', backgroundColor: '#EDE9E3',
+        width: '100%', aspectRatio: '1080/1350', backgroundColor: '#EDE9E3',
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
         padding: '2rem', position: 'relative', overflow: 'hidden',
       };
@@ -2529,17 +2529,36 @@
 
               {/* Page 1: 표지 */}
               {page === 0 && (
-                <div id="review-card-0" style={cardStyle}>
-                  <p className="text-[10px] tracking-[0.3em] mb-2" style={{ color: '#6B7A8C' }}>{monthEn} {now.getFullYear()}</p>
-                  <h1 className="font-playfair text-2xl font-bold mb-8" style={{ color: '#1F3A60' }}>
-                    당신의 {monthKr} 풍경
-                  </h1>
-                  <img src="/image/noting_heal_building.png" className="w-48 h-auto mb-8 opacity-60" draggable="false" />
-                  {residentNumber && (
-                    <div className="px-4 py-1.5 rounded" style={{ backgroundColor: '#D4B36A' }}>
-                      <p className="text-[9px] font-bold tracking-wider" style={{ color: '#3a2f1e' }}>No. {residentNumber}</p>
-                    </div>
-                  )}
+                <div id="review-card-0" style={{ ...cardStyle, justifyContent: 'flex-start', backgroundColor: '#ECE3CD' }}>
+                  {/* 상단 텍스트 */}
+                  <div className="text-center pt-8 pb-4 w-full">
+                    <p className="text-[10px] tracking-[0.3em] mb-2" style={{ color: '#6B7A8C' }}>{monthEn} {now.getFullYear()}</p>
+                    <h1 className="font-playfair text-2xl font-bold mb-4" style={{ color: '#1F3A60' }}>
+                      당신의 {monthKr} 풍경
+                    </h1>
+                    <div className="mx-auto" style={{ width: '40px', height: '1px', backgroundColor: '#B8AC97' }} />
+                  </div>
+
+                  {/* 입면도 — 크게, 중앙 */}
+                  <div className="flex-1 flex items-center justify-center w-full px-6">
+                    <img src="/image/noting_heal_building.png" className="w-full max-w-[280px] h-auto" draggable="false" />
+                  </div>
+
+                  {/* 시적 한 줄 */}
+                  <div className="text-center py-4">
+                    <p className="font-playfair text-sm leading-relaxed" style={{ color: 'rgba(31,58,96,0.6)' }}>
+                      다녀가신 방들이<br/>등불처럼 켜져 있어요
+                    </p>
+                  </div>
+
+                  {/* 명패 */}
+                  <div className="pb-8">
+                    {residentNumber && (
+                      <div className="px-5 py-2 rounded" style={{ backgroundColor: '#D4B36A', boxShadow: '0 1px 6px rgba(212,179,106,0.3)' }}>
+                        <p className="text-[9px] font-bold tracking-wider" style={{ color: '#3a2f1e' }}>Resident No. {residentNumber}</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
