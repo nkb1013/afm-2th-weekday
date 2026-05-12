@@ -143,6 +143,30 @@
     /* Shade transition for visited rooms */
     .door-shade { transition: background-color 0.5s ease, box-shadow 0.5s ease; }
 
+    /* Corridor silhouettes */
+    @keyframes walkLeft {
+      0% { transform: translateX(calc(100vw + 80px)); }
+      100% { transform: translateX(-120px); }
+    }
+    @keyframes walkRight {
+      0% { transform: translateX(-120px); }
+      100% { transform: translateX(calc(100vw + 80px)); }
+    }
+    .corridor-silhouettes {
+      position: relative;
+      height: 0;
+      overflow: visible;
+      pointer-events: none;
+    }
+    .silhouette {
+      position: absolute;
+      bottom: 20px;
+      opacity: 0.05;
+      pointer-events: none;
+    }
+    .sil-1 { animation: walkLeft 16s linear infinite; }
+    .sil-2 { animation: walkRight 20s linear infinite; }
+
     /* Key moment animations */
     @keyframes keyAppear {
       0% { opacity: 0; transform: scale(0.8) translateY(20px); }
@@ -643,6 +667,7 @@
                   title: r.title, desc: r.description,
                   steps: r.steps || [],
                   conditions: r.conditions || {},
+                  guide_copy: r.guide_copy || '',
                 };
               });
               setRoomData(rd);
@@ -1119,9 +1144,10 @@
         return null;
       }, [notingCount]);
 
-      // 키 발급 안내 카피
+      // 키 발급 안내 카피 (DB guide_copy 우선, 없으면 자동 생성)
       const guideCopy = useMemo(() => {
         if (!assignedRoom) return '';
+        if (assignedRoom.guide_copy) return assignedRoom.guide_copy;
         const core = (assignedRoom.title || '').replace(/의\s*방$/, '').trim();
         return `${core}의 결로 안내드릴게요`;
       }, [assignedRoom]);
@@ -1532,6 +1558,28 @@
                   </div>
                 );
               })}
+            </div>
+          </div>
+
+          {/* 복도 실루엣 — 문 앞을 지나가는 사람들 */}
+          <div className="corridor-silhouettes">
+            {/* 걸어가는 사람 1 — 왼쪽으로 */}
+            <div className="silhouette sil-1">
+              <svg width="45" height="120" viewBox="0 0 45 120" fill="#1F3A60">
+                <ellipse cx="22" cy="12" rx="9" ry="11" />
+                <path d="M22 23 C22 23 18 45 16 55 L12 55 C11 55 10 58 12 58 L18 58 L20 50 L22 65 L16 90 L13 115 C13 117 15 118 16 116 L20 92 L22 75 L24 92 L28 116 C29 118 31 117 31 115 L28 90 L22 65 Z" />
+                <path d="M16 45 L4 60 C3 62 5 63 6 61 L16 50" />
+                <path d="M28 45 L36 55 C37 53 38 50 36 49 L28 43" />
+              </svg>
+            </div>
+            {/* 걸어가는 사람 2 — 오른쪽으로, 약간 작게 */}
+            <div className="silhouette sil-2">
+              <svg width="38" height="100" viewBox="0 0 38 100" fill="#1F3A60">
+                <ellipse cx="19" cy="10" rx="7.5" ry="9" />
+                <path d="M19 19 C19 19 16 38 14 46 L11 46 C10 46 9 48 11 48 L15 48 L17 42 L19 54 L14 75 L11 96 C11 98 13 98 14 97 L17 77 L19 63 L21 77 L24 97 C25 98 27 98 27 96 L24 75 L19 54 Z" />
+                <path d="M14 38 L5 50 C4 51 5 53 7 51 L14 42" />
+                <path d="M24 38 L31 46 C32 45 32 42 30 42 L24 36" />
+              </svg>
             </div>
           </div>
 

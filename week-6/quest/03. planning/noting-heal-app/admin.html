@@ -227,6 +227,7 @@ function RoomModal({ room, onClose, onSave }) {
     description: room.description || '',
     conditions: room.conditions || {},
     steps: (room.steps && room.steps.length > 0) ? room.steps : defaultSteps,
+    guide_copy: room.guide_copy || '',
     is_active: room.is_active !== false,
   });
   const [saving, setSaving] = useState(false);
@@ -296,6 +297,13 @@ function RoomModal({ room, onClose, onSave }) {
             <label className="text-xs font-medium text-gray-500 block mb-1">설명</label>
             <input value={form.description} onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
               className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="예: SNS 보다 내가 작아질 때" />
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">키 발급 안내 문구</label>
+            <input value={form.guide_copy} onChange={e => setForm(prev => ({ ...prev, guide_copy: e.target.value }))}
+              className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="예: 작아지는 마음의 결로 안내드릴게요" />
+            <p className="text-[10px] text-gray-400 mt-1">비워두면 방 이름에서 자동 생성됩니다</p>
           </div>
 
           {/* 3-STEP 노팅 방법 */}
